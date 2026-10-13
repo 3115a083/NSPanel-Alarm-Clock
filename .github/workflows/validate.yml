@@ -1,0 +1,31 @@
+name: Validate alarm configuration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# PRs are untrusted. Never give this job write permissions or secrets.
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-security-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout without persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install YAML test dependency
+        run: python3 -m pip install --disable-pip-version-check --user PyYAML==6.0.2
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Scan for accidental secrets
+        run: python3 .github-secrets-scan.py

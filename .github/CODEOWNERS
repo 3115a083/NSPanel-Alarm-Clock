@@ -1,0 +1,5 @@
+# Must additionally enable "Require review from Code Owners" in a branch ruleset.
+* @3115a083
+/.github/ @3115a083
+/esphome/ @3115a083
+/homeassistant/ @3115a083

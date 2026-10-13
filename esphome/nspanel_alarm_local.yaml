@@ -1,0 +1,304 @@
+# Local, offline-capable weekly alarm for NSPanel Easy v2026.10.0.
+# Time is SNTP-backed instead of solely depending on Home Assistant.
+# Once SNTP has synchronized, a running panel keeps time without HA/Wi-Fi.
+# If both power and time sync are unavailable after a cold boot, timing is NOT guaranteed.
+# Correct timezone MUST match Home Assistant for weekday/date interpretation.
+
+substitutions:
+  alarm_timezone: Europe/Berlin
+
+# NSPanel Easy ships time_provider: homeassistant. Switch to SNTP (upstream documented !extend hook).
+time:
+  - id: !extend time_provider
+    platform: sntp
+    timezone: ${alarm_timezone}
+    servers:
+      - !secret local_ntp_server
+      - 0.pool.ntp.org
+      - 1.pool.ntp.org
+
+# All scheduling data is saved across software restarts. ESPHome manages flash writes.
+preferences:
+  flash_write_interval: 0s  # Alarm ACK/settings must persist promptly; avoid frequent reconfigurations.
+
+globals:
+  - id: wa_hour
+    type: int
+    restore_value: yes
+    initial_value: '6'
+  - id: wa_minute
+    type: int
+    restore_value: yes
+    initial_value: '30'
+  - id: wa_weekmask  # bit0=Monday ... bit6=Sunday
+    type: int
+    restore_value: yes
+    initial_value: '31'
+  - id: wa_enabled
+    type: bool
+    restore_value: yes
+    initial_value: 'false'  # Safe first-boot: must be explicitly armed in HA.
+  - id: wa_snooze_minutes
+    type: int
+    restore_value: yes
+    initial_value: '9'
+  - id: wa_buzzer_grace_s
+    type: int
+    restore_value: yes
+    initial_value: '15'  # Always buzzer after 15s, EVEN IF speaker says "playing".
+  - id: wa_last_fired_ymd
+    type: int
+    restore_value: yes
+    initial_value: '0'
+  - id: wa_unacknowledged
+    type: bool
+    restore_value: yes
+    initial_value: 'false'
+  - id: wa_snooze_epoch
+    type: uint32_t
+    restore_value: yes
+    initial_value: '0'
+  - id: wa_ringing
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: wa_ringing_started_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
+
+api:
+  actions:
+    - action: alarm_configure
+      variables:
+        enabled: bool
+        hour: int
+        minute: int
+        weekdays: int
+        snooze_minutes: int
+        buzzer_grace_seconds: int
+      then:
+        - lambda: |-
+            // Reject corrupt/malformed configs rather than erasing the last good schedule.
+            if (hour < 0 || hour > 23 || minute < 0 || minute > 59 ||
+                weekdays < 0 || weekdays > 127 || snooze_minutes < 1 ||
+                snooze_minutes > 60 || buzzer_grace_seconds < 0 ||
+                buzzer_grace_seconds > 120) {
+              ESP_LOGE("wake_alarm", "REJECTED invalid alarm config");
+              return;
+            }
+            id(wa_hour) = hour;
+            id(wa_minute) = minute;
+            id(wa_weekmask) = weekdays;
+            id(wa_snooze_minutes) = snooze_minutes;
+            id(wa_buzzer_grace_s) = buzzer_grace_seconds;
+            id(wa_enabled) = enabled;
+            ESP_LOGI("wake_alarm", "Stored alarm %02d:%02d, mask=%d, enabled=%d",
+                     hour, minute, weekdays, enabled);
+    - action: alarm_snooze
+      then:
+        - script.execute: wa_do_snooze
+    - action: alarm_stop
+      then:
+        - script.execute: wa_do_stop
+    - action: alarm_test
+      then:
+        - script.execute: wa_start
+
+script:
+  - id: wa_start
+    mode: single
+    then:
+      - if:
+          condition:
+            lambda: 'return !id(wa_ringing);'
+          then:
+            - lambda: |-
+                id(wa_unacknowledged) = true;
+                id(wa_snooze_epoch) = 0;
+                id(wa_ringing) = true;
+                id(wa_ringing_started_ms) = millis();
+                ESP_LOGW("wake_alarm", "Alarm started; buzzer will be mandatory");
+            - script.execute: wa_buzzer_loop
+
+  - id: wa_buzzer_loop
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: 'return id(wa_ringing);'
+          then:
+            - if:
+                condition:
+                  lambda: |-
+                    return (uint32_t)(millis() - id(wa_ringing_started_ms)) >=
+                           (uint32_t)(id(wa_buzzer_grace_s) * 1000);
+                then:
+                  - lambda: |-
+                      // buzzer belongs to the unchanged NSPanel Easy hw_buzzer package.
+                      id(buzzer).play("Wake:d=8,o=6,b=175:c,p,c,p,g,p,g,p,a,p,g,p");
+                  - delay: 3s
+                else:
+                  - delay: 1s
+
+  - id: wa_do_snooze
+    mode: restart
+    then:
+      - if:
+          condition:
+            lambda: 'return id(wa_unacknowledged);'
+          then:
+            - lambda: |-
+                const auto t = id(time_provider).now();
+                if (t.is_valid() && t.timestamp > 1735689600) {
+                  id(wa_snooze_epoch) = (uint32_t)t.timestamp + id(wa_snooze_minutes) * 60;
+                  id(wa_ringing) = false;
+                  ESP_LOGI("wake_alarm", "Snoozed until %u", id(wa_snooze_epoch));
+                } else {
+                  // No trusted clock, do NOT enter an indefinite silent snooze.
+                  id(wa_snooze_epoch) = 0;
+                  ESP_LOGE("wake_alarm", "Snooze denied: clock invalid; alarm continues");
+                }
+            - if:
+                condition:
+                  lambda: 'return !id(wa_ringing);'
+                then:
+                  - script.stop: wa_buzzer_loop
+                  - lambda: 'id(buzzer).stop();'
+
+  - id: wa_do_stop
+    mode: restart
+    then:
+      - lambda: |-
+          // Stop only an existing alarm. Do not suppress an unrelated future day.
+          id(wa_unacknowledged) = false;
+          id(wa_snooze_epoch) = 0;
+          id(wa_ringing) = false;
+          ESP_LOGI("wake_alarm", "Alarm acknowledged and stopped");
+      - script.stop: wa_buzzer_loop
+      - lambda: 'id(buzzer).stop();'
+
+  - id: !extend button_left_press_short
+    then:
+      - if:
+          condition:
+            lambda: 'return id(wa_ringing);'
+          then:
+            - script.execute: wa_do_snooze
+
+  - id: !extend button_right_press_short
+    then:
+      - if:
+          condition:
+            lambda: 'return id(wa_unacknowledged);'
+          then:
+            - script.execute: wa_do_stop
+
+  - id: !extend button_right_press_long
+    then:
+      - if:
+          condition:
+            lambda: 'return id(wa_unacknowledged);'
+          then:
+            - script.execute: wa_do_stop
+
+# A short interval + 15 min catchup ensures ordinary restarts around alarm time do not skip.
+# Independent of the HA automation/Blueprint loop.
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          if (id(wa_unacknowledged)) {
+            if (!id(wa_ringing)) {
+              const auto now = id(time_provider).now();
+              if (!now.is_valid() || now.timestamp <= 1735689600 ||
+                  id(wa_snooze_epoch) == 0 ||
+                  (uint32_t)now.timestamp >= id(wa_snooze_epoch)) {
+                wa_start->execute();
+              }
+            }
+            return;
+          }
+          if (!id(wa_enabled) || !id(wa_weekmask) || id(wa_ringing)) return;
+          const auto now = id(time_provider).now();
+          if (!now.is_valid() || now.timestamp <= 1735689600) return;
+
+          // Check both current and previous civil day to catch up across midnight.
+          for (int offset = 0; offset <= 1; offset++) {
+            const time_t anchor = (time_t)now.timestamp - offset * 86400;
+            struct tm local = {};
+            localtime_r(&anchor, &local);
+            const int dow = (local.tm_wday + 6) % 7;
+            if ((id(wa_weekmask) & (1 << dow)) == 0) continue;
+            const int ymd = (local.tm_year + 1900) * 10000 +
+                            (local.tm_mon + 1) * 100 + local.tm_mday;
+            if (id(wa_last_fired_ymd) == ymd) continue;
+            local.tm_hour = id(wa_hour);
+            local.tm_min = id(wa_minute);
+            local.tm_sec = 0;
+            local.tm_isdst = -1;
+            const time_t alarm_at = mktime(&local);
+            const int64_t elapsed = (int64_t)now.timestamp - (int64_t)alarm_at;
+            if (elapsed >= 0 && elapsed <= 900) {
+              // Remember the date before starting. Avoid double-firing on reboot.
+              id(wa_last_fired_ymd) = ymd;
+              ESP_LOGW("wake_alarm", "Alarm date %d due (delay %llds)", ymd,
+                       (long long)elapsed);
+              wa_start->execute();
+              break;
+            }
+          }
+
+binary_sensor:
+  - platform: template
+    name: "Wecker Uhrzeit gültig"
+    id: wake_alarm_time_valid
+    lambda: |-
+      const auto now = id(time_provider).now();
+      return now.is_valid() && now.timestamp > 1735689600;
+  - platform: template
+    name: "Wecker klingelt"
+    id: wake_alarm_ringing
+    lambda: 'return id(wa_ringing);'
+  - platform: template
+    name: "Wecker unbestätigt"
+    id: wake_alarm_unacknowledged
+    lambda: 'return id(wa_unacknowledged);'
+
+text_sensor:
+  - platform: template
+    name: "Wecker Status"
+    update_interval: 5s
+    lambda: |-
+      if (id(wa_ringing)) return {"ringing"};
+      if (id(wa_unacknowledged)) return {"snoozed"};
+      const auto t = id(time_provider).now();
+      if (!t.is_valid() || t.timestamp <= 1735689600) return {"clock_invalid"};
+      if (id(wa_enabled)) return {"armed"};
+      return {"disarmed"};
+
+sensor:
+  - platform: template
+    name: "Wecker Konfiguration Signatur"
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      return (float)((id(wa_enabled) ? 1 : 0) * 262144 +
+                     id(wa_weekmask) * 2048 + id(wa_hour) * 64 + id(wa_minute));
+
+button:
+  - platform: template
+    name: "Wecker Test"
+    on_press:
+      then:
+        - script.execute: wa_start
+  - platform: template
+    name: "Wecker Schlummern"
+    on_press:
+      then:
+        - script.execute: wa_do_snooze
+  - platform: template
+    name: "Wecker Stoppen"
+    on_press:
+      then:
+        - script.execute: wa_do_stop

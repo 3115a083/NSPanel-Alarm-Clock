@@ -1,0 +1,24 @@
+# Local credentials and ESPHome build/cache artifacts
+**/secrets.yaml
+**/secrets.yml
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.sqlite
+*.db
+**/.esphome/
+.esphome/
+**/.storage/
+**/.pioenvs/
+**/.piolibdeps/
+**/.platformio/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.DS_Store
