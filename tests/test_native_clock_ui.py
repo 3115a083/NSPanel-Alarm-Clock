@@ -34,6 +34,7 @@ int main() {
   assert(make(true, true, 0, false, false).text[6] == "No days selected");
   assert(make(true, false, 127, false, false).text[5] == "Disabled");
   ClockRenderer renderer;
+  assert(&clock_renderer() == &clock_renderer());
   int writes = 0;
   auto write = [&](const char *, const std::string &) { ++writes; };
   renderer.render(v, write);

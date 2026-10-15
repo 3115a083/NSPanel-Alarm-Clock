@@ -55,4 +55,10 @@ struct ClockRenderer {
     fresh = false;
   }
 };
+// ESPHome emits globals<T> storage before user includes in main.cpp. Keep the
+// custom type out of YAML globals; lambdas see this header after it is included.
+inline ClockRenderer &clock_renderer() {
+  static ClockRenderer renderer;
+  return renderer;
+}
 }  // namespace wake_alarm

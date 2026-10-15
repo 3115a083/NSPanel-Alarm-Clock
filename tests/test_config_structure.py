@@ -34,6 +34,11 @@ class ConfigTests(unittest.TestCase):
         addon = yaml.load((ROOT/'nspanel_alarm_addon.yaml').read_text(encoding='utf-8'), Loader=Loader)
         self.assertNotIn('alarm_ui', addon['packages'])
 
+    def test_custom_clock_type_is_not_declared_before_user_header(self):
+        d = yaml.load((ROOT/'esphome/nspanel_alarm_ui_local.yaml').read_text(encoding='utf-8'), Loader=Loader)
+        self.assertTrue(all(g['type'] == 'bool' for g in d['globals']))
+        self.assertIn('wake_alarm::clock_renderer().render(', str(d['interval']))
+
     def test_all_yamls_syntactically_valid(self):
         for p in list(ROOT.rglob('*.yaml')) + list(ROOT.rglob('*.yml')):
             with self.subTest(file=str(p)):

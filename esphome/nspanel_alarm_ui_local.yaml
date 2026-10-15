@@ -12,10 +12,6 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
-  - id: wa_ui_renderer
-    type: wake_alarm::ClockRenderer
-    restore_value: no
-    initial_value: 'wake_alarm::ClockRenderer{}'
   - id: wa_ui_was_ringing
     type: bool
     restore_value: no
@@ -64,7 +60,7 @@ binary_sensor:
           if (!x) return;
           id(wa_hmi_compatible) = true;
           id(wa_clock_page_ready) = true;
-          id(wa_ui_renderer).reset();
+          wake_alarm::clock_renderer().reset();
 
 display:
   - id: !extend disp1
@@ -75,7 +71,7 @@ display:
             id(wa_clock_page_ready) = false;
             id(wa_hmi_protocol).publish_state(false);
             id(wa_clock_protocol).publish_state(false);
-            id(wa_ui_renderer).reset();
+            wake_alarm::clock_renderer().reset();
     on_page:
       then:
         - lambda: |-
@@ -83,7 +79,7 @@ display:
             // announcement after every page change, including display resets.
             id(wa_clock_page_ready) = false;
             id(wa_clock_protocol).publish_state(false);
-            id(wa_ui_renderer).reset();
+            wake_alarm::clock_renderer().reset();
 
 script:
   - id: !extend timer_reset_all
@@ -122,7 +118,7 @@ interval:
             return;
           }
           if (current_page_id != clock_page || !id(wa_clock_page_ready)) {
-            id(wa_ui_renderer).reset();
+            wake_alarm::clock_renderer().reset();
             id(wa_ui_was_ringing) = false;
             return;
           }
@@ -141,6 +137,6 @@ interval:
               now.hour, now.minute, now.year, now.month, now.day_of_month,
               id(wa_enabled), id(wa_hour), id(wa_minute), id(wa_weekmask),
               id(wa_ringing), id(wa_unacknowledged));
-          id(wa_ui_renderer).render(view, [](const char *name, const std::string &text) {
+          wake_alarm::clock_renderer().render(view, [](const char *name, const std::string &text) {
             disp1->set_component_text(name, text.c_str());
           });
