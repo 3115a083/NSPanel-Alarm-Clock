@@ -10,8 +10,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parent
 EXCLUDED = {'.git', '.esphome', '__pycache__', '.pytest_cache'}
-FILE_EXTS = {'.yaml', '.yml', '.json', '.env', '.ini', '.txt', '.md', '.py', '.sh', '.toml'}
-SUSPECT_NAMES = {'secrets.yaml', 'secrets.yml', '.env', 'credentials.json', 'service_account.json'}
+SUSPECT_NAMES = {'secrets.yaml', 'secrets.yml', '.env', 'credentials.json', 'service_account.json', 'id_rsa', 'id_ed25519'}
 RULES = [
     re.compile(r'-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'),
     re.compile(r'gh[pousr]_[a-zA-Z0-9]{35,}'),
@@ -25,10 +24,13 @@ def main():
         if not path.is_file() or any(part in EXCLUDED for part in path.relative_to(ROOT).parts):
             continue
         rel = path.relative_to(ROOT)
-        if path.name in SUSPECT_NAMES:
+        if (path.name in SUSPECT_NAMES or
+                (path.name.startswith('.env.') and path.name != '.env.example') or
+                path.suffix.lower() in {'.p12', '.pfx', '.jks'}):
             violations.append((rel, 'credential file'))
             continue
-        if path.suffix not in FILE_EXTS or path.stat().st_size > 1024 * 1024:
+        # Scan every small UTF-8 file, including extensionless and C++/JS sources.
+        if path.stat().st_size > 1024 * 1024:
             continue
         try:
             raw = path.read_text(encoding='utf-8')

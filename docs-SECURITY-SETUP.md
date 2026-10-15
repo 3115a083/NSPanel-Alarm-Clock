@@ -34,3 +34,22 @@ Open `.../settings/security_analysis` or `Settings > Advanced Security` (UI labe
 ## Verify
 
 `Settings > Rules > Rulesets` should show an active rule for `main`. A test PR should be blocked until the `unit-security-checks` workflow succeeds and approval is recorded. A force push to `main` should be rejected.
+
+## Verified follow-up, 2026-10-15
+
+Ruleset `main` (ID 25165128) is active on the default branch. It requires a PR,
+linear history, blocks deletion/force pushes, and requires `unit-security-checks`
+from GitHub Actions (integration 15368).
+
+Still open: approvals=0, code-owner review=false, stale dismissal=false,
+last-push approval=false, conversation resolution=false, strict status checks=false.
+Integration 1144995 has `always` bypass. No release-tag ruleset was returned.
+Identify and remove unnecessary standing app bypass. Add `firmware-build` as a
+required check after the first successful run. Independent review requires a
+second trusted person; document the solo-maintainer decision without self-approval.
+
+Classic branch protection could not be read (403). Secret scanning/push protection,
+Dependabot alerts/security updates, private reporting, default Actions permissions,
+account 2FA and collaborator/deploy-key settings remain unverified. Missing access
+does not mean these features are disabled. No administrative rule was changed by
+this code review.

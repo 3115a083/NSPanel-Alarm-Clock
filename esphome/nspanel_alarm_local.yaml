@@ -183,7 +183,7 @@ script:
       - lambda: 'id(buzzer).stop();'
 
   - id: !extend button_left_press_short
-    then:
+    then: !override  # Alarm buttons must not also run upstream relay actions.
       - if:
           condition:
             lambda: 'return id(wa_ringing);'
@@ -191,7 +191,7 @@ script:
             - script.execute: wa_do_snooze
 
   - id: !extend button_right_press_short
-    then:
+    then: !override  # Alarm buttons must not also run upstream relay actions.
       - if:
           condition:
             lambda: 'return id(wa_unacknowledged);'
@@ -199,7 +199,7 @@ script:
             - script.execute: wa_do_stop
 
   - id: !extend button_right_press_long
-    then:
+    then: !override  # Alarm buttons must not also run upstream relay actions.
       - if:
           condition:
             lambda: 'return id(wa_unacknowledged);'
@@ -271,3 +271,20 @@ text_sensor:
                id(wa_enabled) ? 1 : 0, id(wa_weekmask), id(wa_hour),
                id(wa_minute), id(wa_snooze_minutes), id(wa_buzzer_grace_s));
       return {signature};
+
+button:
+  - platform: template
+    name: "Wecker Test"
+    on_press:
+      then:
+        - script.execute: wa_start
+  - platform: template
+    name: "Wecker Schlummern"
+    on_press:
+      then:
+        - script.execute: wa_do_snooze
+  - platform: template
+    name: "Wecker Stoppen"
+    on_press:
+      then:
+        - script.execute: wa_do_stop

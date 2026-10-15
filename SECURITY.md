@@ -15,7 +15,7 @@ If private vulnerability reporting is unavailable, ask the repository owner for 
 - The device is on a trusted home network. ESPHome API uses a unique secret encryption key.
 - Local OTA update should use a unique strong password and is only reachable from trusted hosts.
 - No cloud credentials, device secrets, `.env` files, production configurations, compiled firmware, or local tokens belong in Git.
-- `NSPanel Easy` upstream release is pinned; updates require review and regression testing. An upstream tag is not an immutable commit. For stronger supply-chain protection, replace the tag with a reviewed commit SHA.
+- `NSPanel Easy` package and external component use reviewed commit `45df86828e36da06b736096c81afb8b686d7b885` (v2026.10.0). Updates require review and regression testing.
 - Avoid publicly exposing ESPHome native API (TCP 6053), OTA, Home Assistant, or NTP management.
 - `main` requires a GitHub ruleset. The ruleset must be enabled in repository settings; CODEOWNERS alone cannot enforce reviews.
 - GitHub Actions jobs have read-only token access, no pull_request_target event, no self-hosted runner and no secrets.
