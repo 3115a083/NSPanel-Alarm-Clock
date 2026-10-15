@@ -19,6 +19,7 @@ Home Assistant alarm-clock prototype for original Sonoff NSPanel EU/US (not Pro)
 
 | Path | Purpose |
 |---|---|
+| `nspanel_alarm.yaml` | Complete remote package, pinned Easy base and local alarm |
 | `esphome/nspanel-schlafzimmer.yaml` | Panel configuration, upstream version pin, API/Wi-Fi policies |
 | `esphome/nspanel_alarm_local.yaml` | Offline-capable scheduler, buzzer, Snooze/Stop, and status |
 | `homeassistant/wecker_package.yaml` | HA helpers, synchronization, audio and alerts |
@@ -30,7 +31,7 @@ Home Assistant alarm-clock prototype for original Sonoff NSPanel EU/US (not Pro)
 ## Installation planning
 
 1. Acquire original Sonoff NSPanel EU/US, not Pro. Flash only the powered-off controller with a **3.3V** UART adapter as specified in [NSPanel Easy installation](https://github.com/edwardtfn/NSPanel-Easy/blob/main/docs/install.md).
-2. Copy both `esphome/*.yaml` and `esphome/alarm_schedule.h` into `/config/esphome/`. Add unique values for `wifi_ssid`, `wifi_password`, `nspanel_api_encryption_key`, and `local_ntp_server` to your **local** `/config/esphome/secrets.yaml`, never to Git.
+2. Copy only `esphome/nspanel-schlafzimmer.yaml` into `/config/esphome/`. It fetches the complete alarm package from GitHub. Add unique values for `wifi_ssid`, `wifi_password`, `nspanel_api_encryption_key`, and `local_ntp_server` to your **local** `/config/esphome/secrets.yaml`, never to Git. Existing local-file users must follow the one-time migration in [GitHub updates](docs/GITHUB-UPDATES.md), including removing the old local header from the active directory.
 3. Run `esphome config nspanel-schlafzimmer.yaml`, then `esphome compile nspanel-schlafzimmer.yaml` with a supported ESPHome version. Resolve any upstream compatibility conflicts first. Import the matching NSPanel Easy Blueprint and TFT from its tagged release.
 4. Configure `homeassistant: packages: !include_dir_named packages` and copy `homeassistant/wecker_package.yaml` into the HA packages folder. Check configuration in HA before restart.
 5. Verify the entity/service IDs after pairing the device. This prototype uses `nspanel_schlafzimmer` identifiers as examples; device ID slugs can differ. A missing service means schedule synchronization is not occurring.

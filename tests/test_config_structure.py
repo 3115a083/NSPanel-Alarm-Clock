@@ -62,5 +62,25 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaises(yaml.constructor.ConstructorError):
             yaml.load("then: !override []", Loader=Loader)
 
+    def test_remote_entry_keeps_upstream_pinned_and_alarm_in_same_checkout(self):
+        entry = yaml.load((ROOT/'nspanel_alarm.yaml').read_text(encoding='utf-8'), Loader=Loader)
+        upstream = entry['packages']['nspanel_easy']
+        self.assertRegex(upstream['ref'], r'^[0-9a-f]{40}$')
+        self.assertEqual(entry['substitutions']['ref_name'], upstream['ref'])
+        self.assertEqual(entry['packages']['alarm_core'], 'esphome/nspanel_alarm_local.yaml')
+        self.assertFalse(entry['substitutions']['upload_tft_automatically'])
+        self.assertEqual(entry['api']['reboot_timeout'], '0s')
+        self.assertEqual(entry['wifi']['reboot_timeout'], '0s')
+        self.assertEqual(entry['ota'][0]['encryption'], {})
+
+    def test_device_fetches_one_complete_project_package(self):
+        device = yaml.load((ROOT/'esphome/nspanel-schlafzimmer.yaml').read_text(encoding='utf-8'), Loader=Loader)
+        self.assertEqual(set(device['packages']), {'alarm_clock'})
+        package = device['packages']['alarm_clock']
+        self.assertEqual(package['url'], 'https://github.com/3115a083/NSPanel-Alarm-Clock')
+        self.assertEqual(package['files'], ['nspanel_alarm.yaml'])
+        self.assertEqual(package['refresh'], 'always')
+        self.assertNotIn('includes', device.get('esphome', {}))
+
 if __name__ == '__main__':
     unittest.main()
