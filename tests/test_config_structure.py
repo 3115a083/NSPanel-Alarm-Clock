@@ -67,20 +67,32 @@ class ConfigTests(unittest.TestCase):
         upstream = entry['packages']['nspanel_easy']
         self.assertRegex(upstream['ref'], r'^[0-9a-f]{40}$')
         self.assertEqual(entry['substitutions']['ref_name'], upstream['ref'])
-        self.assertEqual(entry['packages']['alarm_core'], 'esphome/nspanel_alarm_local.yaml')
+        self.assertEqual(entry['packages']['alarm_addon'], 'nspanel_alarm_addon.yaml')
         self.assertFalse(entry['substitutions']['upload_tft_automatically'])
-        self.assertEqual(entry['api']['reboot_timeout'], '0s')
-        self.assertEqual(entry['wifi']['reboot_timeout'], '0s')
-        self.assertEqual(entry['ota'][0]['encryption'], {})
 
-    def test_device_fetches_one_complete_project_package(self):
+    def test_device_fetches_separate_base_and_alarm_packages(self):
         device = yaml.load((ROOT/'esphome/nspanel-schlafzimmer.yaml').read_text(encoding='utf-8'), Loader=Loader)
-        self.assertEqual(set(device['packages']), {'alarm_clock'})
-        package = device['packages']['alarm_clock']
+        self.assertEqual(set(device['packages']), {'nspanel_easy', 'alarm_addon'})
+        base = device['packages']['nspanel_easy']
+        self.assertEqual(base['url'], 'https://github.com/edwardtfn/NSPanel-Easy')
+        self.assertRegex(base['ref'], r'^[0-9a-f]{40}$')
+        self.assertEqual(device['substitutions']['ref_name'], base['ref'])
+        self.assertEqual(base['refresh'], 'never')
+        package = device['packages']['alarm_addon']
         self.assertEqual(package['url'], 'https://github.com/3115a083/NSPanel-Alarm-Clock')
-        self.assertEqual(package['files'], ['nspanel_alarm.yaml'])
+        self.assertEqual(package['files'], ['nspanel_alarm_addon.yaml'])
         self.assertEqual(package['refresh'], 'always')
         self.assertNotIn('includes', device.get('esphome', {}))
 
+    def test_alarm_addon_does_not_load_or_repin_the_base(self):
+        addon = yaml.load((ROOT/'nspanel_alarm_addon.yaml').read_text(encoding='utf-8'), Loader=Loader)
+        self.assertEqual(addon['packages'], {'alarm_core': 'esphome/nspanel_alarm_local.yaml'})
+        self.assertNotIn('ref_name', addon['substitutions'])
+        self.assertNotIn('ref_url', addon['substitutions'])
+        self.assertEqual(addon['api']['reboot_timeout'], '0s')
+        self.assertEqual(addon['wifi']['reboot_timeout'], '0s')
+        self.assertEqual(addon['ota'][0]['encryption'], {})
+
 if __name__ == '__main__':
     unittest.main()
+

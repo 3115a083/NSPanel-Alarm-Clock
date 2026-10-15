@@ -3,7 +3,7 @@
 Target: original NSPanel EU/US, NSPanel Easy v2026.10.2, ESPHome 2026.9.1.
 This is a prototype. Keep an independent alarm during hardware acceptance.
 
-**Recommended update path:** use the complete GitHub package described in
+**Recommended update path:** use the separate GitHub alarm add-on described in
 [GITHUB-UPDATES.md](GITHUB-UPDATES.md). It fetches both the alarm YAML and C++
 header without repeated manual downloads. The local-file steps below remain an
 alternative for a deliberately local installation. Do not mix both methods.
@@ -97,3 +97,4 @@ still need to remain unassigned.
 Only after local tests configure the schedule and the optional HA audio package,
 then test restarts, HA/Wi-Fi loss and clock behavior. A successful compile or API
 handshake is not an audible-alarm test.
+
