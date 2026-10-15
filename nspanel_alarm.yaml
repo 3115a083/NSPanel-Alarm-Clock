@@ -1,4 +1,5 @@
-# Remote entry point. Load this package once; it already includes NSPanel Easy.
+# Compatibility entry point bundling the tested Easy base and alarm add-on.
+# New installations can load Easy and nspanel_alarm_addon.yaml separately.
 # Device names, credentials and timezone remain in the local device YAML.
 substitutions:
   ref_name: c9aff59c397c26b0556c4e3930827502a5836d00
@@ -16,15 +17,4 @@ packages:
     refresh: never
     files:
       - nspanel_esphome.yaml
-  alarm_core: !include esphome/nspanel_alarm_local.yaml
-
-api:
-  reboot_timeout: 0s
-
-wifi:
-  reboot_timeout: 0s
-
-ota:
-  - id: !extend ota_std
-    password: !remove
-    encryption: {}
+  alarm_addon: !include nspanel_alarm_addon.yaml

@@ -1,0 +1,24 @@
+# Alarm-only add-on. Load NSPanel Easy separately before this package.
+# Tested base: Easy v2026.10.2, ESPHome 2026.9.1, TFT 22.0.
+# Do not combine this entry with nspanel_alarm.yaml (it already includes us).
+substitutions:
+  upload_tft_automatically: false
+
+esphome:
+  min_version: 2026.9.1
+
+packages:
+  alarm_core: !include esphome/nspanel_alarm_local.yaml
+
+# Preserve the working clock during loss of Home Assistant or Wi-Fi.
+api:
+  reboot_timeout: 0s
+
+wifi:
+  reboot_timeout: 0s
+
+# Keep NSPanel Easy's listener and lifecycle hooks, require encrypted OTA.
+ota:
+  - id: !extend ota_std
+    password: !remove
+    encryption: {}

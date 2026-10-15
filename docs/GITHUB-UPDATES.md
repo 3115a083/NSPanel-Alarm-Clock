@@ -1,69 +1,94 @@
-# Get updates directly from GitHub
+# Update the alarm separately from NSPanel Easy
 
-The ESPHome device YAML can fetch this complete project package, including the
-alarm C++ header. Only the device YAML and `secrets.yaml` remain local.
-Requires ESPHome 2026.9.1 or later. This version resolves a package's header
-relative to the declaring YAML when no local file shadows it.
+Keep NSPanel Easy as the hardware base. Load the alarm as a separate GitHub
+add-on. Only your device YAML and secrets.yaml stay local; the alarm YAML and
+C++ header are fetched together. Requires ESPHome 2026.9.1 or later.
 
-## One-time migration from local alarm files
+## Device configuration
+
+Keep existing device names, Wi-Fi secrets, static API encryption key, timezone
+and local_ntp_server secret. Use exactly these two package entries:
+
+```yaml
+substitutions:
+  # Keep your other substitutions here.
+  ref_name: c9aff59c397c26b0556c4e3930827502a5836d00
+  language: en
+  upload_tft_automatically: false
+
+packages:
+  nspanel_easy:
+    url: https://github.com/edwardtfn/NSPanel-Easy
+    ref: c9aff59c397c26b0556c4e3930827502a5836d00 # v2026.10.2
+    refresh: never
+    files:
+      - nspanel_esphome.yaml
+  alarm_addon:
+    url: https://github.com/3115a083/NSPanel-Alarm-Clock
+    ref: main
+    refresh: always
+    files:
+      - nspanel_alarm_addon.yaml
+```
+
+The Easy package and its external component (ref_name) stay on the same
+tested commit. Alarm updates do not change this pin. Upgrade Easy deliberately
+after compatibility testing. The add-on uses Easy hardware IDs and hooks; it
+is not compatible with arbitrary future Easy versions by assumption.
+
+The add-on supplies the local scheduler, buzzer, alarm button hooks, offline
+API/Wi-Fi reboot policy and required encrypted OTA through Easy's ota_std.
+It does not load another Easy base or override ref_name. Existing local
+API/Wi-Fi timeout settings may remain. An identical local !extend ota_std
+block may be removed because the add-on supplies it. Keep the API key unchanged.
+
+## One-time migration
 
 1. Back up the working device YAML and secrets locally.
-2. Move the old `nspanel_alarm_local.yaml` and **`alarm_schedule.h`** out of
-   `/config/esphome/` into your backup folder. ESPHome checks beside the device
-   YAML first, so leaving an old header there can silently build old code.
-3. Replace the entire existing `packages:` mapping with:
+2. For an existing local-file setup, move both nspanel_alarm_local.yaml and
+   **alarm_schedule.h** out of /config/esphome/ into the backup folder.
+   ESPHome looks beside the device YAML first; an old local header can shadow
+   the current remote header.
+3. Replace the old packages mapping with the split mapping above. Do not keep
+   a local wake_alarm include or a third package loading nspanel_alarm.yaml.
+4. Validate the device YAML. Then install wirelessly, inspect the saved schedule
+   and perform a short Test/Stop check.
 
-   ```yaml
-   packages:
-     alarm_clock:
-       url: https://github.com/3115a083/NSPanel-Alarm-Clock
-       ref: main
-       refresh: always
-       files:
-         - nspanel_alarm.yaml
-   ```
+If already using the previous combined nspanel_alarm.yaml, it remains supported.
+It now composes the same base and add-on, so migration need not interrupt an
+existing working setup. Use either the combined entry OR the split entries.
 
-   This entry already includes the pinned NSPanel Easy package. Remove the old
-   Easy package entry and `wake_alarm: !include ...`; loading both duplicates
-   scripts and hardware configuration. Do not replace device names or secrets.
-4. Keep existing `api.encryption.key`, Wi-Fi secrets, `alarm_timezone`,
-   `language: en` and `upload_tft_automatically: false`. The entry point supplies
-   encrypted OTA and zero API/Wi-Fi reboot timeouts. An identical local
-   `!extend ota_std` block may be removed; do not add another OTA listener.
-5. Keep `local_ntp_server` in local `secrets.yaml`. Validate, then install
-   wirelessly through the existing ESPHome device entry. Check the alarm's saved
-   schedule and repeat a short Test/Stop check after updating.
+## Subsequent updates
 
-## Subsequent firmware updates
+Use **Install → Wirelessly** in ESPHome Device Builder. refresh: always fetches
+the latest alarm source during configuration/build. The Easy base stays fixed.
+Both packages are linked into **one ESP32 firmware** and uploaded together;
+there is no separately installable runtime plug-in or second OTA slot for the alarm.
+Validation alone does not update the running panel.
 
-Use **Install  Wirelessly** in ESPHome Device Builder. `refresh: always` fetches
-the package at the start of configuration/build operations. Validation alone
-does not change the running device; installation compiles with local credentials
-and uploads through required encrypted OTA. No recurring manual file download.
-
-`main` is the development update channel. It follows merged changes after the
-required unit/security and complete firmware build checks. CI cannot prove
-hardware acceptance of every change. Replace `ref: main` with a reviewed full
-commit SHA to freeze or roll back to that source revision. Keep a known-working
+main is the development update channel. It follows merged changes after the
+required unit/security and complete firmware build checks. CI does not prove
+hardware acceptance of every change. Set only the alarm package ref to a
+reviewed full commit SHA to freeze or roll back its source. Keep a known-working
 device configuration. A frozen ref does not advance automatically.
 
-Builds require access to GitHub and toolchain/package sources. The installed
-local alarm does not need GitHub to run. This package does not install scheduled
-unattended updates or publish a generic binary containing device credentials.
+Secrets stay local. No scheduled unattended flashing or generic device binary
+is provided. GitHub and toolchain sources are needed for updates, not for the
+installed local alarm to run.
 
-## Display and Home Assistant updates
+## Display and Home Assistant
 
-ESP32 firmware, Nextion TFT and Home Assistant Blueprint are separate artifacts.
-There is not yet a custom clock TFT or project Blueprint release to install.
-When introduced, publish matched versions and a compatibility check, plus a
-GitHub URL for TFT upload and Blueprint import. Retain controlled TFT installation:
-an ESPHome package refresh alone must not upload a TFT or replace an automation.
-Do not point a TFT uploader at GitHub source HTML or an uncompiled HMI file.
+Keep the working Easy TFT and per-device Blueprint automation during this phase.
+No project clock TFT or project Blueprint has been released yet. The custom
+clock view remains a goal. A custom layout still needs a compatible TFT and
+firmware protocol; keeping Easy as base does not remove that maintenance.
+Future TFT download and Blueprint import URLs must name matched versions.
+A source refresh must not upload a TFT or create competing base automations.
 
 ## Maintainer verification
 
-CI copies only the consumer device YAML into an isolated temporary directory.
-It fetches this package at the exact tested Git SHA, resolves the header from
-the remote checkout, verifies it matches the candidate source, validates merged
-alarm hooks and encryption policy, then compiles the complete firmware.
-This prevents a local source copy from hiding a broken remote installation.
+CI copies only the consumer device YAML into an isolated directory. It fetches
+the alarm at the exact tested Git SHA, verifies header origin and byte equality,
+validates merged button hooks, encrypted OTA and offline timeouts, then compiles
+the split configuration. It also validates the old combined entry and compares
+its scripts, globals, API, OTA, Wi-Fi and time configuration with the split setup.

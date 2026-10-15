@@ -69,6 +69,32 @@ with tempfile.TemporaryDirectory(prefix="alarm-firmware-") as temp:
         raise RuntimeError("Offline alarm must not reboot for loss of API/Wi-Fi")
     print("Merged alarm hooks, encrypted OTA and offline reboot policy verified.")
 
+    # The previously published combined entry must keep the same behavior.
+    prefix = device_text.split("packages:\n", 1)[0]
+    suffix = device_text[device_text.index("# Long-lived"):]
+    compatibility = prefix + (
+        "packages:\n"
+        "  alarm_clock:\n"
+        "    url: https://github.com/3115a083/NSPanel-Alarm-Clock\n"
+        f"    ref: {package_ref}\n"
+        "    refresh: always\n"
+        "    files: [nspanel_alarm.yaml]\n\n"
+    ) + suffix
+    compat_path = config / "combined-compatibility.yaml"
+    compat_path.write_text(compatibility, encoding="utf-8")
+    compat_result = subprocess.run(
+        [sys.executable, "-m", "esphome", "config", str(compat_path)],
+        check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    sys.stderr.write(compat_result.stderr)
+    if compat_result.returncode:
+        print(compat_result.stdout)
+    compat_result.check_returncode()
+    compat_merged = yaml.load(compat_result.stdout, Loader=ConfigLoader)
+    for key in ("script", "globals", "api", "ota", "wifi", "time"):
+        if compat_merged[key] != merged[key]:
+            raise RuntimeError("Combined entry differs from split setup: " + key)
+    print("Combined compatibility entry matches split alarm/base behavior.")
+
     subprocess.run([sys.executable, "-m", "esphome", "compile", path], check=True)
 
     defines = config / ".esphome/build/nspanel-schlafzimmer/src/esphome/core/defines.h"
