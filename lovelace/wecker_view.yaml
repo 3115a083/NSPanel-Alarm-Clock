@@ -1,11 +1,11 @@
 # Lovelace view fragment; add to an existing YAML-mode dashboard under views:.
 # Entity IDs of the panel must be checked after ESPHome pairing.
-- title: Wecker
+- title: Alarm Clock
   path: wecker
   icon: mdi:alarm
   cards:
     - type: entities
-      title: Wecker konfigurieren
+      title: Configure Alarm Clock
       show_header_toggle: false
       entities:
         - entity: input_boolean.wecker_aktiv
@@ -14,7 +14,7 @@
         - entity: input_number.wecker_snooze
         - entity: input_number.wecker_summer_verzoegerung
     - type: entities
-      title: Wochentage
+      title: Weekdays
       show_header_toggle: false
       entities:
         - input_boolean.wecker_mo
@@ -25,7 +25,7 @@
         - input_boolean.wecker_sa
         - input_boolean.wecker_so
     - type: entities
-      title: Lautsprecher & Medien
+      title: Speaker & Media
       show_header_toggle: false
       entities:
         - input_text.wecker_player
@@ -34,15 +34,15 @@
         - input_number.wecker_start_lautstaerke
         - input_number.wecker_ziel_lautstaerke
     - type: entities
-      title: Status & Diagnose
+      title: Status & Diagnostics
       show_header_toggle: false
       entities:
-        - binary_sensor.wecker_plan_synchronisiert
-        - sensor.wecker_erwartete_konfigurationssignatur
-        - sensor.nspanel_schlafzimmer_wecker_konfiguration_signatur
-        - sensor.nspanel_schlafzimmer_wecker_status
-        - binary_sensor.nspanel_schlafzimmer_wecker_klingelt
-        - binary_sensor.nspanel_schlafzimmer_wecker_unbestatigt
+        - binary_sensor.alarm_clock_schedule_synchronized
+        - sensor.alarm_clock_expected_configuration_signature
+        - sensor.nspanel_schlafzimmer_alarm_clock_configuration_signature
+        - sensor.nspanel_schlafzimmer_alarm_clock_status
+        - binary_sensor.nspanel_schlafzimmer_alarm_clock_ringing
+        - binary_sensor.nspanel_schlafzimmer_alarm_clock_pending
     - type: horizontal-stack
       cards:
         - type: button
@@ -52,13 +52,13 @@
             action: call-service
             service: script.wecker_test
         - type: button
-          name: Schlummern
+          name: Snooze
           icon: mdi:sleep
           tap_action:
             action: call-service
             service: script.wecker_schlummern
         - type: button
-          name: Stoppen
+          name: Stop
           icon: mdi:alarm-off
           tap_action:
             action: call-service

@@ -35,7 +35,7 @@ class AudioBoundaryTests(unittest.TestCase):
         self.assertEqual({t["trigger"] for t in automation["triggers"]}, {"state", "homeassistant"})
         self.assertEqual(automation["conditions"][0]["state"], "on")
         self.assertEqual(automation["conditions"][0]["entity_id"],
-                         "binary_sensor.nspanel_schlafzimmer_wecker_klingelt")
+                         "binary_sensor.nspanel_schlafzimmer_alarm_clock_ringing")
 
     def test_ack_cancels_pending_playback_and_ramp(self):
         actions = PACKAGE["script"]["wecker_audio_beenden"]["sequence"]
@@ -62,7 +62,7 @@ class AudioBoundaryTests(unittest.TestCase):
         values = {"input_boolean.wecker_aktiv": "on", "input_boolean.wecker_mo": "on",
                   "input_number.wecker_snooze": "9",
                   "input_number.wecker_summer_verzoegerung": "15",
-                  "input_select.wecker_ausgabe": "Lautsprecher + Summer"}
+                  "input_select.wecker_ausgabe": "Speaker + buzzer"}
         attrs = {("input_datetime.wecker_zeit", "hour"): 6,
                  ("input_datetime.wecker_zeit", "minute"): 30}
         self.assertEqual(render(template, values, attrs), "1:1:6:30:9:15")

@@ -1,4 +1,4 @@
-# Local, offline-capable weekly alarm for NSPanel Easy v2026.10.0.
+# Local, offline-capable weekly alarm for NSPanel Easy v2026.10.2.
 # Time is SNTP-backed instead of solely depending on Home Assistant.
 # Once SNTP has synchronized, a running panel keeps time without HA/Wi-Fi.
 # If both power and time sync are unavailable after a cold boot, timing is NOT guaranteed.
@@ -245,23 +245,23 @@ interval:
 
 binary_sensor:
   - platform: template
-    name: "Wecker Uhrzeit gültig"
+    name: "Alarm Clock Time Valid"
     id: wake_alarm_time_valid
     lambda: |-
       const auto now = id(time_provider).now();
       return now.is_valid() && now.timestamp > 1735689600;
   - platform: template
-    name: "Wecker klingelt"
+    name: "Alarm Clock Ringing"
     id: wake_alarm_ringing
     lambda: 'return id(wa_ringing);'
   - platform: template
-    name: "Wecker unbestätigt"
+    name: "Alarm Clock Pending"
     id: wake_alarm_unacknowledged
     lambda: 'return id(wa_unacknowledged);'
 
 text_sensor:
   - platform: template
-    name: "Wecker Status"
+    name: "Alarm Clock Status"
     update_interval: 5s
     lambda: |-
       if (id(wa_ringing)) return {"ringing"};
@@ -272,7 +272,7 @@ text_sensor:
       return {"disarmed"};
 
   - platform: template
-    name: "Wecker Konfiguration Signatur"
+    name: "Alarm Clock Configuration Signature"
     update_interval: 10s
     lambda: |-
       char signature[48];
@@ -283,17 +283,17 @@ text_sensor:
 
 button:
   - platform: template
-    name: "Wecker Test"
+    name: "Alarm Clock Test"
     on_press:
       then:
         - script.execute: wa_start
   - platform: template
-    name: "Wecker Schlummern"
+    name: "Alarm Clock Snooze"
     on_press:
       then:
         - script.execute: wa_do_snooze
   - platform: template
-    name: "Wecker Stoppen"
+    name: "Alarm Clock Stop"
     on_press:
       then:
         - script.execute: wa_do_stop

@@ -8,9 +8,15 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 class Loader(yaml.SafeLoader):
     pass
 
-Loader.add_multi_constructor("!", lambda loader, tag, node:
-    loader.construct_scalar(node) if isinstance(node, yaml.ScalarNode)
-    else loader.construct_sequence(node))
+def construct_tag(loader, node):
+    if isinstance(node, yaml.ScalarNode):
+        return loader.construct_scalar(node)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node)
+    return loader.construct_mapping(node)
+
+for tag in ("!secret", "!include", "!extend", "!remove", "!lambda", "!env_var"):
+    Loader.add_constructor(tag, construct_tag)
 
 class ConfigTests(unittest.TestCase):
     def test_all_yamls_syntactically_valid(self):
@@ -39,7 +45,11 @@ class ConfigTests(unittest.TestCase):
     def test_dashboard_buttons_remain_available(self):
         d = yaml.load((ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8'), Loader=Loader)
         self.assertEqual({b['name'] for b in d['button']},
-                         {'Wecker Test', 'Wecker Schlummern', 'Wecker Stoppen'})
+                         {'Alarm Clock Test', 'Alarm Clock Snooze', 'Alarm Clock Stop'})
+
+    def test_unsupported_override_tag_is_rejected(self):
+        with self.assertRaises(yaml.constructor.ConstructorError):
+            yaml.load("then: !override []", Loader=Loader)
 
 if __name__ == '__main__':
     unittest.main()
