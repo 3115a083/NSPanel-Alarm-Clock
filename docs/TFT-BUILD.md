@@ -1,8 +1,8 @@
 # Prepare the custom clock TFT
 
-Status: experimental clock HMI layout is available for Editor review. No
-installable clock TFT or live clock renderer has been validated yet. The running
-Easy TFT remains unchanged.
+Status: protocol-v2 HMI source and an opt-in local renderer are available for
+Editor/device testing. No compiled clock TFT has been validated or released.
+The default alarm add-on does not enable the UI or upload a TFT.
 
 ## Reproducible source preparation
 
@@ -60,8 +60,8 @@ Open the generated HMI in the Editor and select **home_smpl**. This existing
 offline-capable page is repurposed for a dedicated clock view, preserving page
 registration and every other resource. Its original named components remain
 available but hidden; old touch/navigation actions and timers on this page are
-disabled. New wa_ components show placeholders until the future firmware
-renderer is connected. This is a read-only layout preview, not working clock
+disabled. New wa_ components show placeholders until the optional firmware
+renderer is connected. This is a read-only clock view, not working touchscreen
 controls or a replacement for the already tested local alarm core.
 
 CI provides an **eu-clock-hmi-preview** source artifact with the HMI, upstream
@@ -70,16 +70,48 @@ the pinned HMI, not from your local device configuration. No credentials enter i
 Artifacts are retained for 14 days; this is not a stable TFT release URL.
 
 The generator verifies the pinned source SHA-256, original page/directory
-checksums and lossless component parsing. It rebuilds only home_smpl, preserving
-all other live resources byte-for-byte, and verifies the resulting checksums.
+checksums and lossless component parsing. It rebuilds home_smpl and appends a
+protocol announcement to the existing boot acknowledgement timer. All other
+live resources stay byte-for-byte identical.
 An independent Nextion2Text read also succeeded locally. These checks do not
 prove Nextion Editor acceptance or device rendering. Compile in Editor and
 inspect home_smpl before firmware integration. **Do not flash this preview.**
 
-The future firmware must wait for the wa_clock_v1 display announcement before
-addressing new components, set the clock as the local wake-up/home view, render
-local values and handle HA-unavailable cold boot. Those hooks are not installed
-by this source-only change.
+### Optional firmware renderer, protocol v2
+
+After Editor acceptance, add `nspanel_alarm_ui.yaml` immediately after
+`nspanel_alarm_addon.yaml` in the same GitHub package `files` list. Keep Easy
+and the regular alarm add-on. Do not replace the complete device YAML or secrets.
+The UI is separate and is not enabled by updating the alarm add-on.
+
+The boot page announces `wa_hmi_v2` using Nextion custom binary event 0x93.
+The clock page announces `wa_clock_v2` on entry. The earlier v1 preview is
+incompatible with this renderer. On an unmodified TFT there are no new-component
+writes and no automatic switch to home_smpl. Display setup clears compatibility;
+every page change clears entry readiness and the write cache. Firmware requires
+both compatibility and a fresh clock-page event before rendering unscoped fields.
+
+The renderer reads the existing local time/schedule/ring/snooze globals. It shows
+time, ISO date, configured alarm time (not a calculated next occurrence), enabled
+state and weekdays. Invalid time shows --:-- and Waiting for time sync.
+Ringing and Snoozed take status priority. The 1s loop writes only changed fields
+and stops during TFT/OTA upload or a display queue backlog. No UI cache or
+countdown is written to flash.
+
+`Alarm Clock Start View` selects Clock or NSPanel Easy, persisted by ESPHome.
+The optional UI owns home/wake routing, superseding Easy wake-up-page settings.
+Selection changes subsequent home/wake routing, not the currently open page.
+A compatible display exits boot into the selected home without waiting for HA,
+Wi-Fi or the Blueprint. It does not fake Easy readiness flags. Existing Easy
+boot work may continue in the background. The clock stays visible with normal
+dimming. Ringing opens it and prevents sleep/dimming. Stop/Snooze restores the
+normal dim timer. Physical buttons and mandatory buzzer keep their existing path.
+
+Still pending: Editor compile and device verification of startup, display reset,
+offline operation, Stop/Snooze, routing and background Easy constructors.
+Touchscreen editing, optional weather, own Blueprint, relay/sensor pages and
+Music Assistant controls follow after clock acceptance. One HMI retains the
+standard home, entity and media pages; two complete HMI variants are unnecessary.
 
 ### Target behavior
 

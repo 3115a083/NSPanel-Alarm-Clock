@@ -1,0 +1,127 @@
+# Experimental protocol v2, EU only. No HA/Blueprint readiness dependency.
+esphome:
+  includes:
+    - alarm_ui.h
+
+globals:
+  - id: wa_hmi_compatible
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: wa_clock_page_ready
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: wa_ui_renderer
+    type: wake_alarm::ClockRenderer
+    restore_value: no
+    initial_value: 'wake_alarm::ClockRenderer{}'
+  - id: wa_ui_was_ringing
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+select:
+  - platform: template
+    id: wa_start_view
+    name: Alarm Clock Start View
+    entity_category: config
+    options: [Clock, NSPanel Easy]
+    initial_option: Clock
+    optimistic: true
+    restore_value: true
+    update_interval: never
+
+binary_sensor:
+  # The HMI emits these known Nextion custom binary events. No polling of
+  # nonexistent new components on a stock TFT. These are capabilities, not auth.
+  - platform: nextion
+    id: wa_hmi_protocol
+    nextion_id: disp1
+    component_name: wa_hmi_v2
+    internal: true
+    on_state:
+      - lambda: |-
+          if (!x) return;
+          id(wa_hmi_compatible) = true;
+          ESP_LOGI("wake_alarm.ui", "Clock HMI protocol v2 detected");
+  - platform: nextion
+    id: wa_clock_protocol
+    nextion_id: disp1
+    component_name: wa_clock_v2
+    internal: true
+    on_state:
+      - lambda: |-
+          if (!x) return;
+          id(wa_hmi_compatible) = true;
+          id(wa_clock_page_ready) = true;
+          id(wa_ui_renderer).reset();
+
+display:
+  - id: !extend disp1
+    on_setup:
+      then:
+        - lambda: |-
+            id(wa_hmi_compatible) = false;
+            id(wa_clock_page_ready) = false;
+            id(wa_ui_renderer).reset();
+    on_page:
+      then:
+        - lambda: |-
+            // sendme precedes the page's protocol event. Require a fresh entry
+            // announcement after every page change, including display resets.
+            id(wa_clock_page_ready) = false;
+            id(wa_ui_renderer).reset();
+
+script:
+  - id: !extend timer_reset_all
+    then:
+      - lambda: |-
+          if (id(wa_hmi_compatible) && current_page_id == get_page_id("home_smpl")) {
+            timer_sleep->stop();  // Keep the clock visible; regular dimming stays.
+          }
+
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          if (!id(wa_hmi_compatible) || !disp1->is_setup() ||
+              system_flags.tft_upload_active || system_flags.ota_in_progress) return;
+          const auto clock_page = get_page_id("home_smpl");
+          const auto home = id(wa_start_view).current_option() == "Clock" ?
+                            clock_page : get_page_id("home");
+          // Own only home/wake routing, not Easy readiness or blueprint flags.
+          if (home_page_id != home || wakeup_page_id != home) {
+            home_page_id = home;
+            wakeup_page_id = home;
+            disp1->send_command_printf("home_page_id=%u", home);
+            disp1->send_command_printf("wakeup_page_id=%u", home);
+          }
+          if (current_page_id == get_page_id("boot") ||
+              (id(wa_ringing) && current_page_id != clock_page)) {
+            goto_page->execute(id(wa_ringing) ? clock_page : home);
+            return;
+          }
+          if (current_page_id != clock_page || !id(wa_clock_page_ready)) {
+            id(wa_ui_renderer).reset();
+            id(wa_ui_was_ringing) = false;
+            return;
+          }
+          if (disp1->queue_size() > 8) return;  // No growing display backlog.
+          timer_sleep->stop();
+          if (id(wa_ringing)) {
+            timer_dim->stop();
+            if (!id(wa_ui_was_ringing)) set_brightness->execute(display_brightness->state);
+          } else if (id(wa_ui_was_ringing)) {
+            timer_dim->execute();
+          }
+          id(wa_ui_was_ringing) = id(wa_ringing);
+          const auto now = id(time_provider).now();
+          const auto view = wake_alarm::clock_view(
+              now.is_valid() && now.timestamp > 1735689600,
+              now.hour, now.minute, now.year, now.month, now.day_of_month,
+              id(wa_enabled), id(wa_hour), id(wa_minute), id(wa_weekmask),
+              id(wa_ringing), id(wa_unacknowledged));
+          id(wa_ui_renderer).render(view, [](const char *name, const std::string &text) {
+            disp1->set_component_text(name, text.c_str());
+          });

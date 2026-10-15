@@ -6,6 +6,9 @@ Home Assistant alarm-clock prototype for original Sonoff NSPanel EU/US (not Pro)
 
 ## What is implemented
 
+- Optional EU clock UI with local time/plan/status, changed-only display writes,
+  protocol-v2 HMI detection and Clock/NSPanel Easy start-view selection.
+  This UI still needs Editor and device acceptance. See [TFT build/testing](docs/TFT-BUILD.md).
 - Locally persisted enabled/disabled alarm, clock time, seven weekdays, snooze length and buzzer grace period.
 - Offline-capable local buzzer and panel-button Snooze/Stop; mandatory buzzer even if a speaker reports `playing`.
 - 15-minute catch-up window, persisted unacknowledged alarm and snooze time, startup recovery.
