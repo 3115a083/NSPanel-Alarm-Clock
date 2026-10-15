@@ -81,6 +81,7 @@ This keeps its device identity and API key.
 
 ```bash
 python3 -m pip install PyYAML==6.0.2 Jinja2==3.1.6
+python3 tools/prepare_tft_sources.py
 python3 -m unittest discover -s tests -v
 python3 .github-secrets-scan.py
 ```
@@ -88,7 +89,13 @@ python3 .github-secrets-scan.py
 A C++17 compiler (`g++`) is required for native scheduler tests. CI additionally
 validates and compiles the complete example with ESPHome 2026.9.1 and generated
 dummy credentials. A compiled example is not a firmware image for your device.
-Copy `esphome/alarm_schedule.h` along with both YAML files during installation.
+The remote add-on fetches its alarm YAML and matching C++ header together;
+see [GitHub updates](docs/GITHUB-UPDATES.md) for migration from local files.
+
+An experimental dedicated EU clock HMI is available for Editor review through
+the `eu-clock-hmi-preview` Actions artifact. Select `home_smpl` in the generated
+HMI. It contains layout placeholders; live data rendering and a validated clock
+TFT are still pending. See [TFT development](docs/TFT-BUILD.md). Do not flash it.
 
 ## Hardware acceptance gate
 
