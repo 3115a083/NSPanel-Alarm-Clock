@@ -3,6 +3,11 @@
 Target: original NSPanel EU/US, NSPanel Easy v2026.10.2, ESPHome 2026.9.1.
 This is a prototype. Keep an independent alarm during hardware acceptance.
 
+**Recommended update path:** use the complete GitHub package described in
+[GITHUB-UPDATES.md](GITHUB-UPDATES.md). It fetches both the alarm YAML and C++
+header without repeated manual downloads. The local-file steps below remain an
+alternative for a deliberately local installation. Do not mix both methods.
+
 ## 1. Save the current working configuration
 
 Keep the existing device name, friendly name, static API key and Wi-Fi secrets.

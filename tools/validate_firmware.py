@@ -2,7 +2,8 @@
 from pathlib import Path
 import base64
 import hashlib
-import shutil
+import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -11,7 +12,16 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory(prefix="alarm-firmware-") as temp:
     config = Path(temp)
-    shutil.copytree(ROOT / "esphome", config, dirs_exist_ok=True)
+    # Test the actual consumer path. Never copy an alarm YAML/header beside the
+    # device config: ESPHome prefers a local header over the remote package's.
+    # CI must fetch the tested commit, including PR code, rather than old main.
+    package_ref = os.environ.get("GITHUB_SHA", "main")
+    if package_ref != "main" and not re.fullmatch(r"[0-9a-f]{40}", package_ref):
+        raise RuntimeError("Expected a full Git commit SHA for the remote build")
+    # Preserve !secret tags in the written example rather than inline credentials.
+    device_text = (ROOT / "esphome/nspanel-schlafzimmer.yaml").read_text(encoding="utf-8")
+    device_text = device_text.replace("ref: main", "ref: " + package_ref)
+    (config / "nspanel-schlafzimmer.yaml").write_text(device_text, encoding="utf-8")
     dummy = {
         "wifi_ssid": "CI_ONLY_NOT_A_REAL_NETWORK",
         "wifi_password": "CI_ONLY_NOT_A_REAL_PASSWORD",
@@ -36,6 +46,13 @@ with tempfile.TemporaryDirectory(prefix="alarm-firmware-") as temp:
         else loader.construct_sequence(node) if isinstance(node, yaml.SequenceNode)
         else loader.construct_mapping(node))
     merged = yaml.load(result.stdout, Loader=ConfigLoader)
+    includes = [Path(p) for p in merged["esphome"]["includes"]]
+    headers = [p for p in includes if p.name == "alarm_schedule.h"]
+    if len(headers) != 1 or headers[0].parent == config:
+        raise RuntimeError("Alarm header must resolve from the remote package checkout")
+    if headers[0].read_bytes() != (ROOT / "esphome/alarm_schedule.h").read_bytes():
+        raise RuntimeError("Remote package header differs from the tested source")
+    print("Remote YAML and matching C++ header resolved without local alarm files.")
     for hook in ["button_left_press_short", "button_right_press_short", "button_right_press_long"]:
         handlers = [item for item in merged["script"] if str(item["id"]) == hook]
         if len(handlers) != 1:

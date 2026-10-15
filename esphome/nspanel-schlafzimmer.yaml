@@ -1,41 +1,32 @@
 # Sonoff NSPanel EU/US (not NSPanel Pro).
-# Put this file and nspanel_alarm_local.yaml into /config/esphome/.
+# Only this device YAML and your secrets.yaml belong in /config/esphome/.
+# The alarm YAML and C++ header are fetched together from GitHub.
 # This example is NOT a verified production firmware. Keep an independent alarm.
 substitutions:
   device_name: nspanel-schlafzimmer
   friendly_name: NSPanel Schlafzimmer
   wifi_ssid: !secret wifi_ssid
   wifi_password: !secret wifi_password
-  ref_name: c9aff59c397c26b0556c4e3930827502a5836d00  # Pin external component too.
   language: en
   boot_sound: false
   upload_tft_automatically: false  # Avoid unattended TFT updates near alarm time.
 
 packages:
-  nspanel_easy:
-    url: https://github.com/edwardtfn/NSPanel-Easy
-    ref: c9aff59c397c26b0556c4e3930827502a5836d00  # v2026.10.2
-    refresh: never
+  alarm_clock:
+    url: https://github.com/3115a083/NSPanel-Alarm-Clock
+    ref: main  # Development updates; use a reviewed commit SHA to freeze a build.
+    refresh: always
     files:
-      - nspanel_esphome.yaml
-  wake_alarm: !include nspanel_alarm_local.yaml
+      - nspanel_alarm.yaml
 
 # Long-lived, autonomous local alarm must not reboot periodically merely
 # because Home Assistant or Wi-Fi is offline. Existing core API hooks are merged.
 api:
-  reboot_timeout: 0s
   encryption:
     key: !secret nspanel_api_encryption_key
 
-wifi:
-  reboot_timeout: 0s
-
-# Extend the existing listener and keep NSPanel Easy OTA lifecycle hooks.
-# ESPHome 2026.9.1 inherits the static API key and requires encrypted uploads.
-ota:
-  - id: !extend ota_std
-    password: !remove
-    encryption: {}
+# The remote entry point sets API/Wi-Fi reboot_timeout and encrypted OTA,
+# preserving NSPanel Easy's OTA lifecycle hooks.
 
 # Disable unused web_server and captive_portal. Only local HA API and OTA.
 # Restrict IoT network access to trusted Home Assistant and maintenance hosts.

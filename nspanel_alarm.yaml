@@ -1,0 +1,30 @@
+# Remote entry point. Load this package once; it already includes NSPanel Easy.
+# Device names, credentials and timezone remain in the local device YAML.
+substitutions:
+  ref_name: c9aff59c397c26b0556c4e3930827502a5836d00
+  language: en
+  boot_sound: false
+  upload_tft_automatically: false
+
+esphome:
+  min_version: 2026.9.1
+
+packages:
+  nspanel_easy:
+    url: https://github.com/edwardtfn/NSPanel-Easy
+    ref: c9aff59c397c26b0556c4e3930827502a5836d00
+    refresh: never
+    files:
+      - nspanel_esphome.yaml
+  alarm_core: !include esphome/nspanel_alarm_local.yaml
+
+api:
+  reboot_timeout: 0s
+
+wifi:
+  reboot_timeout: 0s
+
+ota:
+  - id: !extend ota_std
+    password: !remove
+    encryption: {}
