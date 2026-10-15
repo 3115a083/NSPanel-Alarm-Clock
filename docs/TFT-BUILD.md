@@ -102,7 +102,8 @@ countdown is written to flash.
 
 `Alarm Clock Start View` selects Clock or NSPanel Easy, persisted by ESPHome.
 The optional UI owns home/wake routing, superseding Easy wake-up-page settings.
-Selection changes subsequent home/wake routing, not the currently open page.
+Selection also opens the chosen view on the next UI tick. A ringing alarm defers
+the requested view change until Stop/Snooze; the alarm page keeps priority.
 A compatible display exits boot into the selected home without waiting for HA,
 Wi-Fi or the Blueprint. It does not fake Easy readiness flags. Existing Easy
 boot work may continue in the background. The clock stays visible with normal

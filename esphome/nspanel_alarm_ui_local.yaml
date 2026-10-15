@@ -20,6 +20,10 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+  - id: wa_ui_view_change
+    type: bool
+    restore_value: no
+    initial_value: 'false'
 
 select:
   - platform: template
@@ -31,6 +35,9 @@ select:
     optimistic: true
     restore_value: true
     update_interval: never
+    on_value:
+      then:
+        - lambda: 'id(wa_ui_view_change) = true;'
 
 binary_sensor:
   # The HMI emits these known Nextion custom binary events. No polling of
@@ -101,6 +108,13 @@ interval:
             wakeup_page_id = home;
             disp1->send_command_printf("home_page_id=%u", home);
             disp1->send_command_printf("wakeup_page_id=%u", home);
+          }
+          if (id(wa_ui_view_change) && !id(wa_ringing)) {
+            id(wa_ui_view_change) = false;
+            if (current_page_id != home) {
+              goto_page->execute(home);
+              return;
+            }
           }
           if (current_page_id == get_page_id("boot") ||
               (id(wa_ringing) && current_page_id != clock_page)) {
