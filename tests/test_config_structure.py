@@ -1,5 +1,6 @@
 """Shallow static YAML checks, not an ESPHome/HA configuration validator."""
 import pathlib
+import re
 import unittest
 import yaml
 
@@ -46,6 +47,16 @@ class ConfigTests(unittest.TestCase):
         d = yaml.load((ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8'), Loader=Loader)
         self.assertEqual({b['name'] for b in d['button']},
                          {'Alarm Clock Test', 'Alarm Clock Snooze', 'Alarm Clock Stop'})
+
+    def test_flash_sync_is_not_faster_than_restored_globals_poll(self):
+        d = yaml.load((ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8'), Loader=Loader)
+        value = d['preferences']['flash_write_interval']
+        match = re.fullmatch(r'(\d+(?:\.\d+)?)(ms|s)', str(value))
+        self.assertIsNotNone(match, value)
+        seconds = float(match.group(1)) / (1000 if match.group(2) == 'ms' else 1)
+        # ESPHome RestoringGlobalsComponent polls changes once per second.
+        # Faster preference sync wastes scheduler cycles without reducing that delay.
+        self.assertGreaterEqual(seconds, 1.0)
 
     def test_unsupported_override_tag_is_rejected(self):
         with self.assertRaises(yaml.constructor.ConstructorError):

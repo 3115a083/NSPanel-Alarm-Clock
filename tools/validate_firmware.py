@@ -22,10 +22,13 @@ with tempfile.TemporaryDirectory(prefix="alarm-firmware-") as temp:
     (config / "secrets.yaml").write_text(yaml.safe_dump(dummy), encoding="utf-8")
     path = str(config / "nspanel-schlafzimmer.yaml")
     result = subprocess.run([sys.executable, "-m", "esphome", "config", path],
-                            check=False, stdout=subprocess.PIPE, text=True)
+                            check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    sys.stderr.write(result.stderr)
     if result.returncode:
         print(result.stdout)
     result.check_returncode()
+    if 'update_interval of 0ms is not supported' in result.stderr:
+        raise RuntimeError('Zero-period scheduler warning in merged firmware configuration')
     class ConfigLoader(yaml.SafeLoader):
         pass
     ConfigLoader.add_multi_constructor("!", lambda loader, tag, node:
