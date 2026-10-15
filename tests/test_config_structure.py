@@ -34,7 +34,7 @@ class ConfigTests(unittest.TestCase):
     def test_alarm_button_hooks_replace_upstream_relay_actions(self):
         alarm = (ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8')
         for hook in ['button_left_press_short', 'button_right_press_short', 'button_right_press_long']:
-            self.assertIn('id: !extend ' + hook + '\n    then: !override', alarm)
+            self.assertIn('id: !extend ' + hook + '\n    then: !remove', alarm)
 
     def test_dashboard_buttons_remain_available(self):
         d = yaml.load((ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8'), Loader=Loader)

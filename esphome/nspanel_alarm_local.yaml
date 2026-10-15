@@ -182,24 +182,33 @@ script:
       - script.stop: wa_buzzer_loop
       - lambda: 'id(buzzer).stop();'
 
+  # Clear upstream actions in one extension, then install the alarm handler.
   - id: !extend button_left_press_short
-    then: !override  # Alarm buttons must not also run upstream relay actions.
+    then: !remove
+  - id: !extend button_left_press_short
+    then:
       - if:
           condition:
             lambda: 'return id(wa_ringing);'
           then:
             - script.execute: wa_do_snooze
 
+  # Clear upstream actions in one extension, then install the alarm handler.
   - id: !extend button_right_press_short
-    then: !override  # Alarm buttons must not also run upstream relay actions.
+    then: !remove
+  - id: !extend button_right_press_short
+    then:
       - if:
           condition:
             lambda: 'return id(wa_unacknowledged);'
           then:
             - script.execute: wa_do_stop
 
+  # Clear upstream actions in one extension, then install the alarm handler.
   - id: !extend button_right_press_long
-    then: !override  # Alarm buttons must not also run upstream relay actions.
+    then: !remove
+  - id: !extend button_right_press_long
+    then:
       - if:
           condition:
             lambda: 'return id(wa_unacknowledged);'
