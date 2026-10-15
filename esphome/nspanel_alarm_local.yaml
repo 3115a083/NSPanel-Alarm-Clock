@@ -23,7 +23,9 @@ esphome:
     - alarm_schedule.h
 
 preferences:
-  flash_write_interval: 0s  # Alarm ACK/settings must persist promptly; avoid frequent reconfigurations.
+  # Restored globals poll every second; sync pending writes at the same cadence.
+  # Sudden power loss can still lose the most recent state changes.
+  flash_write_interval: 1s
 
 globals:
   - id: wa_hour
