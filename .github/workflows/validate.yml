@@ -27,6 +27,8 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check --user PyYAML==6.0.2 Jinja2==3.1.6
       - name: Run tests
         run: python3 -m unittest discover -s tests -v
+      - name: Verify pinned HMI source download
+        run: python3 tools/prepare_tft_sources.py
       - name: Scan for accidental secrets
         run: python3 .github-secrets-scan.py
 
@@ -42,3 +44,4 @@ jobs:
         run: python3 -m pip install --disable-pip-version-check --user esphome==2026.9.1
       - name: Validate and compile with generated dummy credentials
         run: python3 tools/validate_firmware.py
+
