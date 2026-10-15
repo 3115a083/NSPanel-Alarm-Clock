@@ -90,6 +90,8 @@ incompatible with this renderer. On an unmodified TFT there are no new-component
 writes and no automatic switch to home_smpl. Display setup clears compatibility;
 every page change clears entry readiness and the write cache. Firmware requires
 both compatibility and a fresh clock-page event before rendering unscoped fields.
+Protocol sensors never poll the event names as Nextion variables. Setup/page
+callbacks rearm their local false state so repeated true announcements can fire.
 
 The renderer reads the existing local time/schedule/ring/snooze globals. It shows
 time, ISO date, configured alarm time (not a calculated next occurrence), enabled

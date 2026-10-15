@@ -20,6 +20,20 @@ for tag in ("!secret", "!include", "!extend", "!remove", "!lambda", "!env_var"):
     Loader.add_constructor(tag, construct_tag)
 
 class ConfigTests(unittest.TestCase):
+    def test_clock_handshake_never_polls_virtual_event_names_and_rearms(self):
+        d = yaml.load((ROOT/'esphome/nspanel_alarm_ui_local.yaml').read_text(encoding='utf-8'), Loader=Loader)
+        for sensor in d['binary_sensor']:
+            self.assertEqual(sensor['update_interval'], 'never')
+        display = d['display'][0]
+        setup = display['on_setup']['then'][0]['lambda']
+        page = display['on_page']['then'][0]['lambda']
+        self.assertIn('id(wa_hmi_protocol).publish_state(false)', setup)
+        self.assertIn('id(wa_clock_protocol).publish_state(false)', setup)
+        self.assertIn('id(wa_clock_protocol).publish_state(false)', page)
+        # UI stays opt-in when an existing installation refreshes GitHub main.
+        addon = yaml.load((ROOT/'nspanel_alarm_addon.yaml').read_text(encoding='utf-8'), Loader=Loader)
+        self.assertNotIn('alarm_ui', addon['packages'])
+
     def test_all_yamls_syntactically_valid(self):
         for p in list(ROOT.rglob('*.yaml')) + list(ROOT.rglob('*.yml')):
             with self.subTest(file=str(p)):
