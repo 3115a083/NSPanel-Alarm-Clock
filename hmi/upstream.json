@@ -1,0 +1,21 @@
+{
+  "repository": "edwardtfn/NSPanel-Easy",
+  "commit": "c9aff59c397c26b0556c4e3930827502a5836d00",
+  "editor_minimum": "1.68.2",
+  "target": "NSPanel EU, landscape, 480x320",
+  "files": [
+    {
+      "path": "hmi/nspanel_landscape.hmi",
+      "name": "nspanel_landscape.hmi",
+      "size": 29019258,
+      "git_blob": "a75374cb449c5e4a153430d1efbf3b9269e90ca3",
+      "sha256": "b0d4759ce1b53693a6f90c63743d59a16a09293f8c5358eb27947a794574c13e"
+    },
+    {
+      "path": "LICENSE",
+      "name": "LICENSE.NSPanel-Easy",
+      "size": 1069,
+      "git_blob": "9410f1c741313eaacdf238c9bf62907df2ad14f2"
+    }
+  ]
+}
