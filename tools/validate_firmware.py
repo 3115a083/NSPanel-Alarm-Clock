@@ -95,6 +95,27 @@ with tempfile.TemporaryDirectory(prefix="alarm-firmware-") as temp:
             raise RuntimeError("Combined entry differs from split setup: " + key)
     print("Combined compatibility entry matches split alarm/base behavior.")
 
+    # Compile the optional UI too, from the same remote commit and isolated
+    # consumer directory. The default entry remains unchanged/opt-in.
+    ui_text = device_text.replace("      - nspanel_alarm_addon.yaml",
+                                  "      - nspanel_alarm_addon.yaml\n      - nspanel_alarm_ui.yaml")
+    if ui_text == device_text:
+        raise RuntimeError("Cannot inject optional UI package into consumer fixture")
+    Path(path).write_text(ui_text, encoding="utf-8")
+    ui_result = subprocess.run([sys.executable, "-m", "esphome", "config", path],
+        check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    sys.stderr.write(ui_result.stderr)
+    if ui_result.returncode:
+        print(ui_result.stdout)
+    ui_result.check_returncode()
+    ui_merged = yaml.load(ui_result.stdout, Loader=ConfigLoader)
+    ui_headers = [Path(p) for p in ui_merged["esphome"]["includes"] if Path(p).name == "alarm_ui.h"]
+    if len(ui_headers) != 1 or ui_headers[0].parent == config or ui_headers[0].read_bytes() != (ROOT / "esphome/alarm_ui.h").read_bytes():
+        raise RuntimeError("Optional UI header must resolve from the tested remote checkout")
+    for key in ("api", "ota", "wifi", "time"):
+        if ui_merged[key] != merged[key]:
+            raise RuntimeError("Optional UI changes core safety configuration: " + key)
+    print("Optional clock UI and matching header resolve remotely; core safety configuration unchanged.")
     subprocess.run([sys.executable, "-m", "esphome", "compile", path], check=True)
 
     defines = config / ".esphome/build/nspanel-schlafzimmer/src/esphome/core/defines.h"

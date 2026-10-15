@@ -1,0 +1,5 @@
+# Optional EU clock UI. Load AFTER nspanel_alarm_addon.yaml and NSPanel Easy.
+# Requires the generated protocol-v2 clock HMI, not the earlier layout preview.
+# No TFT upload or scheduler changes. Keep this separate until hardware acceptance.
+packages:
+  alarm_ui: !include esphome/nspanel_alarm_ui_local.yaml

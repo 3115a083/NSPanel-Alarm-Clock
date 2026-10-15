@@ -182,9 +182,9 @@ LAYOUT = [
     ('wa_time', '--:--', 20, 44, 440, 94, 6, 65535, 1),
     ('wa_date', 'Waiting for firmware', 20, 140, 440, 30, 2, 52857, 1),
     ('wa_label', 'ALARM TIME', 20, 190, 230, 26, 1, 52857, 0),
-    ('wa_alarm', '--:--', 20, 216, 200, 54, 5, 65535, 0),
+    ('wa_alarm', '--:--', 20, 216, 200, 48, 5, 65535, 0),
     ('wa_enabled', 'Unknown', 280, 216, 180, 36, 3, 52857, 2),
-    ('wa_days', 'No plan received', 20, 268, 440, 24, 1, 52857, 0),
+    ('wa_days', 'No plan received', 20, 282, 440, 26, 1, 52857, 0),
 ]
 
 
@@ -228,7 +228,7 @@ def make_clock_page(original):
         'dim=brightness', 'back_page_id=home_page_id',
         *['vis ' + name + ',0' for name in hidden],
         'sendme', 'printh 93',
-        'prints "wa_clock_v1",0', 'printh 00 01 FF FF FF',
+        'prints "wa_clock_v2",0', 'printh 00 01 FF FF FF',
     ]]
     return write_page(original, components)
 
@@ -239,18 +239,31 @@ def build(source):
     if hashlib.sha256(source).hexdigest() != expected:
         raise ValueError('Only the pinned, unmodified EU source is supported')
     entries = directory(source)
-    target = [entry for entry in entries if entry[1].endswith('.pa') and
-              source[entry[2] + 24:entry[2] + 40].split(b'\0')[0] == b'home_smpl']
-    if len(target) != 1:
-        raise ValueError('Expected exactly one home_smpl resource')
-    off, name, start, size = target[0]
-    replacement = make_clock_page(source[start:start + size])
+    targets = {source[e[2]+24:e[2]+40].split(b'\0')[0]: e for e in entries
+               if e[1].endswith('.pa')}
+    if b'home_smpl' not in targets or b'boot' not in targets:
+        raise ValueError('Missing clock or boot resource')
     result = bytearray(source)
-    new_start = len(result)
-    result.extend(replacement)
-    struct.pack_into('<II', result, off + 16, new_start, len(replacement))
-    # Mirror metadata; keep the unknown entry tail bytes intact.
-    result[BACKUP + off:BACKUP + off + 28] = result[off:off + 28]
+    changed = set()
+    for page_name in (b'home_smpl', b'boot'):
+        off, name, start, size = targets[page_name]
+        original = source[start:start + size]
+        if page_name == b'home_smpl':
+            replacement = make_clock_page(original)
+            patched = read_page(replacement)
+        else:
+            components = read_page(original)
+            timer = next(c for c in components if attribute(c, 'objname') == b'tm_display_ack')
+            # Repeats until communication is ready, even without Wi-Fi/HA.
+            # Preserve the complete original acknowledgement event.
+            timer[b'codestimer'] = timer[b'codestimer'] + [b'printh 93',
+                b'prints "wa_hmi_v2",0', b'printh 00 01 FF FF FF']
+            replacement = write_page(original, components)
+        new_start = len(result)
+        result.extend(replacement)
+        struct.pack_into('<II', result, off + 16, new_start, len(replacement))
+        result[BACKUP + off:BACKUP + off + 28] = result[off:off + 28]
+        changed.add(name)
     end = 4 + 28 * u32(result)
     crc = checksum(result[:end] + b'ADEC', stride=4)
     struct.pack_into('<I', result, end, crc)
@@ -261,9 +274,8 @@ def build(source):
         _, new_name, new_offset, new_size = after
         if old_name != new_name:
             raise ValueError('Resource order changed')
-        if old_name != name and source[old_start:old_start + old_size] != result[new_offset:new_offset + new_size]:
+        if old_name not in changed and source[old_start:old_start + old_size] != result[new_offset:new_offset + new_size]:
             raise ValueError('Unrelated resource changed: ' + old_name)
-    patched = read_page(replacement)
     if [attribute(c, 'objname').decode() for c in patched[-len(LAYOUT):]] != [row[0] for row in LAYOUT]:
         raise ValueError('Clock components did not round-trip')
     return bytes(result)
