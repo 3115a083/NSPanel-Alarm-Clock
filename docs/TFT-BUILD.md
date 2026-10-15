@@ -1,7 +1,8 @@
 # Prepare the custom clock TFT
 
-Status: source preparation only. No custom HMI page or installable clock TFT
-has been produced yet. The running Easy TFT remains unchanged.
+Status: experimental clock HMI layout is available for Editor review. No
+installable clock TFT or live clock renderer has been validated yet. The running
+Easy TFT remains unchanged.
 
 ## Reproducible source preparation
 
@@ -47,6 +48,41 @@ assists development; it does not prove real-device rendering or timing.
 
 ## First local clock page contract
 
+### Experimental layout candidate
+
+After preparing sources, run:
+
+```text
+python tools/build_clock_hmi.py build/tft/upstream/nspanel_landscape.hmi --output build/tft/working/nspanel_alarm_eu_preview.hmi
+```
+
+Open the generated HMI in the Editor and select **home_smpl**. This existing
+offline-capable page is repurposed for a dedicated clock view, preserving page
+registration and every other resource. Its original named components remain
+available but hidden; old touch/navigation actions and timers on this page are
+disabled. New wa_ components show placeholders until the future firmware
+renderer is connected. This is a read-only layout preview, not working clock
+controls or a replacement for the already tested local alarm core.
+
+CI provides an **eu-clock-hmi-preview** source artifact with the HMI, upstream
+license, source manifest and these instructions. The source is generated from
+the pinned HMI, not from your local device configuration. No credentials enter it.
+Artifacts are retained for 14 days; this is not a stable TFT release URL.
+
+The generator verifies the pinned source SHA-256, original page/directory
+checksums and lossless component parsing. It rebuilds only home_smpl, preserving
+all other live resources byte-for-byte, and verifies the resulting checksums.
+An independent Nextion2Text read also succeeded locally. These checks do not
+prove Nextion Editor acceptance or device rendering. Compile in Editor and
+inspect home_smpl before firmware integration. **Do not flash this preview.**
+
+The future firmware must wait for the wa_clock_v1 display announcement before
+addressing new components, set the clock as the local wake-up/home view, render
+local values and handle HA-unavailable cold boot. Those hooks are not installed
+by this source-only change.
+
+### Target behavior
+
 The design target is 480 x 320, English initially. It must display current
 time, date, configured alarm time, selected days, enabled status and the next
 actual alarm. Invalid local time displays --:--. Ringing and snoozed states
@@ -56,9 +92,9 @@ to flash. Render only changed values and page-entry snapshots.
 All new component names must use a wa_ prefix. Document names, actual generated
 component IDs, available font glyphs and touch events from the edited HMI.
 Do not hardcode guessed IDs. A new page requires matching Easy page registration
-and offline-capability handling; an existing offline page must be checked for
-constructor/refresh conflicts before reuse. That integration choice is not yet
-implemented. Easy's existing alarm page is a security system, not an alarm clock.
+and offline-capability handling. This candidate reuses home_smpl; firmware must
+still prevent constructor/refresh conflicts and provide local startup/rendering.
+Easy's existing alarm page is a security system, not an alarm clock.
 The unmodified canvas page redirects away when HA is offline.
 
 Firmware owns the schedule and ring/snooze state. Future TFT touch actions call

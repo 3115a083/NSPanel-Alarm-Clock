@@ -25,10 +25,24 @@ jobs:
           persist-credentials: false
       - name: Install YAML test dependency
         run: python3 -m pip install --disable-pip-version-check --user PyYAML==6.0.2 Jinja2==3.1.6
-      - name: Run tests
-        run: python3 -m unittest discover -s tests -v
       - name: Verify pinned HMI source download
         run: python3 tools/prepare_tft_sources.py
+      - name: Run tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Generate experimental EU clock HMI
+        run: python3 tools/build_clock_hmi.py build/tft/upstream/nspanel_landscape.hmi --output build/tft/working/nspanel_alarm_eu_preview.hmi
+      - name: Upload experimental HMI source for Editor review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: eu-clock-hmi-preview
+          path: |
+            build/tft/working/nspanel_alarm_eu_preview.hmi
+            build/tft/upstream/LICENSE.NSPanel-Easy
+            hmi/upstream.json
+            hmi/FORMAT-REFERENCES.md
+            docs/TFT-BUILD.md
+          if-no-files-found: error
+          retention-days: 14
       - name: Scan for accidental secrets
         run: python3 .github-secrets-scan.py
 
