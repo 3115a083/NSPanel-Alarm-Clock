@@ -18,6 +18,10 @@ time:
       - 1.pool.ntp.org
 
 # All scheduling data is saved across software restarts. ESPHome manages flash writes.
+esphome:
+  includes:
+    - alarm_schedule.h
+
 preferences:
   flash_write_interval: 0s  # Alarm ACK/settings must persist promptly; avoid frequent reconfigurations.
 
@@ -223,30 +227,11 @@ interval:
           const auto now = id(time_provider).now();
           if (!now.is_valid() || now.timestamp <= 1735689600) return;
 
-          // Check both current and previous civil day to catch up across midnight.
-          for (int offset = 0; offset <= 1; offset++) {
-            const time_t anchor = (time_t)now.timestamp - offset * 86400;
-            struct tm local = {};
-            localtime_r(&anchor, &local);
-            const int dow = (local.tm_wday + 6) % 7;
-            if ((id(wa_weekmask) & (1 << dow)) == 0) continue;
-            const int ymd = (local.tm_year + 1900) * 10000 +
-                            (local.tm_mon + 1) * 100 + local.tm_mday;
-            if (id(wa_last_fired_ymd) == ymd) continue;
-            local.tm_hour = id(wa_hour);
-            local.tm_min = id(wa_minute);
-            local.tm_sec = 0;
-            local.tm_isdst = -1;
-            const time_t alarm_at = mktime(&local);
-            const int64_t elapsed = (int64_t)now.timestamp - (int64_t)alarm_at;
-            if (elapsed >= 0 && elapsed <= 900) {
-              // Remember the date before starting. Avoid double-firing on reboot.
-              id(wa_last_fired_ymd) = ymd;
-              ESP_LOGW("wake_alarm", "Alarm date %d due (delay %llds)", ymd,
-                       (long long)elapsed);
-              wa_start->execute();
-              break;
-            }
+          const int ymd = wake_alarm::due_date((time_t)now.timestamp,
+              id(wa_hour), id(wa_minute), id(wa_weekmask), id(wa_last_fired_ymd));
+          if (ymd != 0) {
+            id(wa_last_fired_ymd) = ymd;
+            wa_start->execute();
           }
 
 binary_sensor:
@@ -277,28 +262,12 @@ text_sensor:
       if (id(wa_enabled)) return {"armed"};
       return {"disarmed"};
 
-sensor:
   - platform: template
     name: "Wecker Konfiguration Signatur"
-    accuracy_decimals: 0
     update_interval: 10s
     lambda: |-
-      return (float)((id(wa_enabled) ? 1 : 0) * 262144 +
-                     id(wa_weekmask) * 2048 + id(wa_hour) * 64 + id(wa_minute));
-
-button:
-  - platform: template
-    name: "Wecker Test"
-    on_press:
-      then:
-        - script.execute: wa_start
-  - platform: template
-    name: "Wecker Schlummern"
-    on_press:
-      then:
-        - script.execute: wa_do_snooze
-  - platform: template
-    name: "Wecker Stoppen"
-    on_press:
-      then:
-        - script.execute: wa_do_stop
+      char signature[48];
+      snprintf(signature, sizeof(signature), "%d:%d:%d:%d:%d:%d",
+               id(wa_enabled) ? 1 : 0, id(wa_weekmask), id(wa_hour),
+               id(wa_minute), id(wa_snooze_minutes), id(wa_buzzer_grace_s));
+      return {signature};

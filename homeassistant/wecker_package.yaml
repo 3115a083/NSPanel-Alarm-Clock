@@ -65,12 +65,9 @@ input_text:
   wecker_medien_typ:
     name: Medien-Typ (integrationsspezifisch)
     max: 60
-  wecker_letzter_plan_tag:
-    name: Interner letzter Wecktag
-    max: 10
-  wecker_letzter_audio_start:
-    name: Interner letzter Audiostart (Epoch)
-    max: 32
+  wecker_aktiver_player:
+    name: Interner vom Wecker gestarteter Lautsprecher
+    max: 255
 
 # Diagnostic signature: expected schedule config vs what the ESPHome reports.
 template:
@@ -84,10 +81,12 @@ template:
               {% set ns.mask = ns.mask + 2 ** loop.index0 %}
             {% endif %}
           {% endfor %}
-          {{ (262144 if is_state('input_boolean.wecker_aktiv', 'on') else 0) +
-             ns.mask * 2048 +
-             (state_attr('input_datetime.wecker_zeit', 'hour') | int(0)) * 64 +
-             (state_attr('input_datetime.wecker_zeit', 'minute') | int(0)) }}
+          {{ [1 if is_state('input_boolean.wecker_aktiv', 'on') else 0,
+              ns.mask, state_attr('input_datetime.wecker_zeit', 'hour') | int(0),
+              state_attr('input_datetime.wecker_zeit', 'minute') | int(0),
+              states('input_number.wecker_snooze') | int(9),
+              0 if is_state('input_select.wecker_ausgabe', 'Summer') else
+                states('input_number.wecker_summer_verzoegerung') | int(15)] | join(':') }}
   - binary_sensor:
       - name: "Wecker Plan synchronisiert"
         unique_id: wecker_schedule_synced
@@ -96,7 +95,7 @@ template:
           {% set expected = states('sensor.wecker_erwartete_konfigurationssignatur') %}
           {{ have not in ['unknown','unavailable'] and
              expected not in ['unknown','unavailable'] and
-             have | int(-1) == expected | int(-2) }}
+             have == expected }}
         availability: >-
           {{ states('sensor.nspanel_schlafzimmer_wecker_konfiguration_signatur') not in
              ['unknown','unavailable'] }}
@@ -108,68 +107,151 @@ script:
     sequence:
       - action: esphome.nspanel_schlafzimmer_alarm_stop
         continue_on_error: true
-      - action: script.turn_off
-        target:
-          entity_id: script.wecker_lautstaerkerampe
-        continue_on_error: true
-      - if:
-          - condition: template
-            value_template: "{{ states('input_text.wecker_player').startswith('media_player.') }}"
-        then:
-          - action: media_player.media_stop
-            data:
-              entity_id: "{{ states('input_text.wecker_player') }}"
-            continue_on_error: true
+      - action: script.wecker_audio_beenden
 
   wecker_schlummern:
     alias: Wecker schlummern (HA + NSPanel)
     mode: restart
     sequence:
+      # Only confirmed local Snooze stops audio. Invalid-clock Snooze is denied.
       - action: esphome.nspanel_schlafzimmer_alarm_snooze
-        continue_on_error: true
+
+  wecker_audio_beenden:
+    alias: Wecker Audio beenden
+    mode: single
+    sequence:
+      # Cancel pending wait/ramp before stopping the originally selected player.
       - action: script.turn_off
         target:
-          entity_id: script.wecker_lautstaerkerampe
-        continue_on_error: true
+          entity_id:
+            - script.wecker_audio_wiedergabe
+            - script.wecker_lautstaerkerampe
+      - variables:
+          player: "{{ states('input_text.wecker_aktiver_player') | trim }}"
       - if:
           - condition: template
-            value_template: "{{ states('input_text.wecker_player').startswith('media_player.') }}"
+            value_template: >-
+              {{ player | regex_match('^media_player[.][a-z0-9_]+$') and
+                 states(player) not in ['unknown', 'unavailable'] }}
         then:
           - action: media_player.media_stop
-            data:
-              entity_id: "{{ states('input_text.wecker_player') }}"
+            target:
+              entity_id: "{{ player }}"
             continue_on_error: true
+      - action: input_text.set_value
+        target:
+          entity_id: input_text.wecker_aktiver_player
+        data:
+          value: ""
 
   wecker_lautstaerkerampe:
     alias: Wecker Lautstärkerampe
     mode: restart
+    fields:
+      player:
+        required: true
+        selector:
+          entity:
+            domain: media_player
     sequence:
+      - condition: template
+        value_template: >-
+          {{ player | regex_match('^media_player[.][a-z0-9_]+$') and
+             states(player) not in ['unknown', 'unavailable'] }}
+      - variables:
+          start: "{{ states('input_number.wecker_start_lautstaerke') | float(0.25) }}"
+          goal: "{{ states('input_number.wecker_ziel_lautstaerke') | float(0.65) }}"
       - repeat:
           count: 8
           sequence:
             - delay: "00:00:30"
-            - if:
-                - condition: template
-                  value_template: >-
-                    {{ states('binary_sensor.nspanel_schlafzimmer_wecker_klingelt') == 'off' }}
-              then:
-                - stop: "Local alarm no longer ringing"
+            - condition: state
+              entity_id: binary_sensor.nspanel_schlafzimmer_wecker_klingelt
+              state: "on"
             - action: media_player.volume_set
+              target:
+                entity_id: "{{ player }}"
               data:
-                entity_id: "{{ states('input_text.wecker_player') }}"
-                volume_level: >-
-                  {% set start = states('input_number.wecker_start_lautstaerke') | float(0.25) %}
-                  {% set goal = states('input_number.wecker_ziel_lautstaerke') | float(0.65) %}
-                  {{ [0.8, start + (goal-start) * repeat.index / 8] | min | round(2) }}
+                volume_level: "{{ [[start + (goal-start) * repeat.index / 8, 0.1] | max, 0.8] | min | round(2) }}"
               continue_on_error: true
+
+  wecker_audio_wiedergabe:
+    alias: Wecker Audio starten
+    mode: single
+    sequence:
+      - condition: state
+        entity_id: binary_sensor.nspanel_schlafzimmer_wecker_klingelt
+        state: "on"
+      - condition: state
+        entity_id: input_select.wecker_ausgabe
+        state: Lautsprecher + Summer
+      - variables:
+          player: "{{ states('input_text.wecker_player') | trim }}"
+          content: "{{ states('input_text.wecker_medien_id') | trim }}"
+          kind: "{{ states('input_text.wecker_medien_typ') | trim }}"
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: >-
+                  {{ player | regex_match('^media_player[.][a-z0-9_]+$') and
+                     states(player) not in ['unknown', 'unavailable'] and
+                     content not in ['', 'unknown', 'unavailable'] and
+                     kind not in ['', 'unknown', 'unavailable'] }}
+            sequence:
+              - action: input_text.set_value
+                target:
+                  entity_id: input_text.wecker_aktiver_player
+                data:
+                  value: "{{ player }}"
+              - action: media_player.volume_set
+                target:
+                  entity_id: "{{ player }}"
+                data:
+                  volume_level: "{{ [[states('input_number.wecker_start_lautstaerke') | float(0.25), 0.1] | max, 0.8] | min }}"
+                continue_on_error: true
+              - condition: state
+                entity_id: binary_sensor.nspanel_schlafzimmer_wecker_klingelt
+                state: "on"
+              - action: media_player.play_media
+                target:
+                  entity_id: "{{ player }}"
+                data:
+                  media_content_id: "{{ content }}"
+                  media_content_type: "{{ kind }}"
+                continue_on_error: true
+              - wait_template: "{{ is_state(player, 'playing') }}"
+                timeout: "00:00:15"
+                continue_on_timeout: true
+              - condition: state
+                entity_id: binary_sensor.nspanel_schlafzimmer_wecker_klingelt
+                state: "on"
+              - choose:
+                  - conditions: "{{ wait.completed }}"
+                    sequence:
+                      - action: script.turn_on
+                        target:
+                          entity_id: script.wecker_lautstaerkerampe
+                        data:
+                          variables:
+                            player: "{{ player }}"
+                default:
+                  - action: persistent_notification.create
+                    data:
+                      notification_id: wecker_audio_problem
+                      title: Wecker Lautsprecherproblem
+                      message: Keine bestätigte Wiedergabe. Der lokale Summer bleibt unabhängig aktiv.
+        default:
+          - action: persistent_notification.create
+            data:
+              notification_id: wecker_audio_problem
+              title: Wecker Audio-Konfiguration prüfen
+              message: Genau einen erreichbaren Lautsprecher, Medien-ID und Medien-Typ einstellen.
 
   wecker_test:
     alias: Wecker Testlauf (echter lokaler Summer)
     sequence:
       - action: esphome.nspanel_schlafzimmer_alarm_test
 
-# Synchronizes full weekly schedule at startup, on edits, and periodically.
-# The local kernel persists the last accepted schedule so HA can crash safely.
 automation:
   - id: wecker_schedule_sync
     alias: Wecker | Wochenplan zu NSPanel übertragen
@@ -193,6 +275,23 @@ automation:
           - input_number.wecker_snooze
           - input_number.wecker_summer_verzoegerung
           - input_select.wecker_ausgabe
+    conditions:
+      - condition: template
+        value_template: >-
+          {% set ns = namespace(ready=true) %}
+          {% for entity in ['input_boolean.wecker_aktiv',
+              'input_boolean.wecker_mo', 'input_boolean.wecker_di',
+              'input_boolean.wecker_mi', 'input_boolean.wecker_do',
+              'input_boolean.wecker_fr', 'input_boolean.wecker_sa',
+              'input_boolean.wecker_so', 'input_datetime.wecker_zeit',
+              'input_number.wecker_snooze',
+              'input_number.wecker_summer_verzoegerung', 'input_select.wecker_ausgabe'] %}
+            {% if states(entity) in ['unknown', 'unavailable'] %}
+              {% set ns.ready = false %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.ready and state_attr('input_datetime.wecker_zeit', 'hour') is not none
+             and state_attr('input_datetime.wecker_zeit', 'minute') is not none }}
     actions:
       - variables:
           weekmask: >-
@@ -214,130 +313,31 @@ automation:
             {{ 0 if is_state('input_select.wecker_ausgabe', 'Summer')
                else states('input_number.wecker_summer_verzoegerung') | int(15) }}
 
+  # The local scheduler is the only authority for scheduled/test/Snooze alarms.
   - id: wecker_audio_start
-    alias: Wecker | Medien starten bei planmäßigem oder lokalem Alarm
+    alias: Wecker | Audio folgt lokalem Alarm
     mode: single
     triggers:
-      - trigger: time
-        at: input_datetime.wecker_zeit
-        id: scheduled
       - trigger: state
         entity_id: binary_sensor.nspanel_schlafzimmer_wecker_klingelt
         to: "on"
-        id: local
-      - trigger: time_pattern
-        minutes: "/1"
-        id: catchup
       - trigger: homeassistant
         event: start
-        id: catchup
     conditions:
       - condition: state
-        entity_id: input_boolean.wecker_aktiv
+        entity_id: binary_sensor.nspanel_schlafzimmer_wecker_klingelt
         state: "on"
     actions:
-      - variables:
-          day_key: "{{ now().strftime('%Y-%m-%d') }}"
-          enabled_today: >-
-            {% set d = ['so','mo','di','mi','do','fr','sa'][now().isoweekday() % 7] %}
-            {{ is_state('input_boolean.wecker_' ~ d, 'on') }}
-          time_elapsed: >-
-            {{ now().hour * 60 + now().minute -
-               (state_attr('input_datetime.wecker_zeit', 'hour') | int(6)) * 60 -
-               (state_attr('input_datetime.wecker_zeit', 'minute') | int(30)) }}
-      - condition: template
-        value_template: >-
-          {{ trigger.id == 'local' or
-             (enabled_today | bool and 0 <= time_elapsed | int(-1) <= 15 and
-              states('input_text.wecker_letzter_plan_tag') != day_key) }}
-      - condition: template
-        value_template: >-
-          {{ (now().timestamp() - states('input_text.wecker_letzter_audio_start') | float(0)) > 30 }}
-      - if:
-          - condition: template
-            value_template: "{{ enabled_today | bool and 0 <= time_elapsed | int(-1) <= 15 }}"
-        then:
-          - action: input_text.set_value
-            target:
-              entity_id: input_text.wecker_letzter_plan_tag
-            data:
-              value: "{{ day_key }}"
-      - action: input_text.set_value
+      - action: script.turn_on
         target:
-          entity_id: input_text.wecker_letzter_audio_start
-        data:
-          value: "{{ now().timestamp() | int }}"
-      - condition: state
-        entity_id: input_select.wecker_ausgabe
-        state: Lautsprecher + Summer
-      - variables:
-          player: "{{ states('input_text.wecker_player') | trim }}"
-          content: "{{ states('input_text.wecker_medien_id') | trim }}"
-          kind: "{{ states('input_text.wecker_medien_typ') | trim }}"
-      - choose:
-          - conditions:
-              - condition: template
-                value_template: >-
-                  {{ player.startswith('media_player.') and content not in
-                     ['', 'unknown', 'unavailable'] and
-                     states(player) not in ['unavailable','unknown'] }}
-            sequence:
-              - action: media_player.volume_set
-                continue_on_error: true
-                data:
-                  entity_id: "{{ player }}"
-                  volume_level: "{{ states('input_number.wecker_start_lautstaerke') | float(0.25) }}"
-              - action: media_player.play_media
-                continue_on_error: true
-                data:
-                  entity_id: "{{ player }}"
-                  media_content_id: "{{ content }}"
-                  media_content_type: "{{ kind }}"
-              - wait_template: "{{ is_state(player, 'playing') }}"
-                timeout: "00:00:15"
-                continue_on_timeout: true
-              - choose:
-                  - conditions:
-                      - condition: template
-                        value_template: "{{ wait.completed }}"
-                    sequence:
-                      - action: script.turn_on
-                        target:
-                          entity_id: script.wecker_lautstaerkerampe
-                default:
-                  - action: persistent_notification.create
-                    data:
-                      title: Wecker Lautsprecherproblem
-                      message: >-
-                        {{ player }} meldet nach 15 Sekunden keine Wiedergabe.
-                        Der lokale NSPanel-Summer klingelt unabhängig davon.
-        default:
-          - action: persistent_notification.create
-            data:
-              title: Wecker Audio-Konfiguration prüfen
-              message: >-
-                Kein erreichbarer Mediaplayer oder keine Medien-ID hinterlegt.
-                NSPanel-Summer bleibt aktiv.
+          entity_id: script.wecker_audio_wiedergabe
 
-  # Hardware buttons work locally; this hook stops audio when ringing -> quiet.
   - id: wecker_audio_stop_on_local_ack
-    alias: Wecker | Lautsprecher bei Snooze oder Stop am Panel anhalten
-    mode: restart
+    alias: Wecker | Audio bei lokalem Snooze oder Stop beenden
+    mode: single
     triggers:
       - trigger: state
         entity_id: binary_sensor.nspanel_schlafzimmer_wecker_klingelt
-        from: "on"
         to: "off"
     actions:
-      - action: script.turn_off
-        target:
-          entity_id: script.wecker_lautstaerkerampe
-        continue_on_error: true
-      - if:
-          - condition: template
-            value_template: "{{ states('input_text.wecker_player').startswith('media_player.') }}"
-        then:
-          - action: media_player.media_stop
-            data:
-              entity_id: "{{ states('input_text.wecker_player') }}"
-            continue_on_error: true
+      - action: script.wecker_audio_beenden
