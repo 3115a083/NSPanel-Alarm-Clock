@@ -43,6 +43,26 @@ def plan(events=(), app_epoch=0, **changes):
     return ast.literal_eval(result.strip()) if isinstance(result, str) else result
 
 class BlueprintPlanTests(unittest.TestCase):
+    def test_missing_android_source_keeps_only_acknowledged_alarm_unless_clear(self):
+        template = next(a['variables']['app_epoch'] for a in BP['actions'] if 'app_epoch' in a.get('variables', {}))
+        saved = epoch('2026-10-19T07:00:00+02:00')
+        env = NativeEnvironment(undefined=StrictUndefined)
+        attrs = {('input_datetime.fixture','timestamp'): saved}
+        states = {'sensor.phone':'unavailable', 'sensor.signature': f'0:0:0:20261019:{saved}:1'}
+        env.globals.update(states=lambda e: states.get(e,'unknown'),
+            state_attr=lambda e,a: attrs.get((e,a)), now=lambda: datetime(2026,10,18,18,tzinfo=TZ),
+            as_timestamp=lambda v,d=0: v.timestamp() if isinstance(v,datetime) else d)
+        values = dict(app_on=True,app_entities=['sensor.phone'],app_package='',
+            app_time_helper='input_datetime.fixture',day_plan_signature='sensor.signature',
+            app_missing_policy='keep_committed')
+        render = lambda: int(str(env.from_string(template).render(**values)).strip())
+        self.assertEqual(render(),saved)
+        values['app_missing_policy'] = 'clear'
+        self.assertEqual(render(),0)
+        values['app_missing_policy'] = 'keep_committed'
+        states['sensor.signature'] = '0:0:0:0:0:0'
+        self.assertEqual(render(),0)
+
     def test_eight_oclock_appointment_wakes_at_seven_thirty(self):
         result = plan([{'start': '2026-10-19T08:00:00+02:00'}])
         self.assertEqual(result, [[0,0,0], [20261019, epoch('2026-10-19T07:30:00+02:00'), 2]])

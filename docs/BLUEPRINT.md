@@ -32,10 +32,13 @@ The date-and-time helper can receive an alarm through an authenticated HA action
 empty for this mode. For Android, select exactly one Companion `next_alarm` sensor
 and enable App Import. Filter it to the intended alarm app in Companion settings;
 optionally require its exact `Package` attribute in the blueprint too.
-The blueprint mirrors the timestamp into the helper. An unknown, unavailable or
-package-mismatched selected sensor removes the app override at the next successful
-sync, falling back to calendar/regular. The helper uses a past sentinel for an
-invalid source, not an invented future alarm. An explicit helper-only import is
+The blueprint mirrors the timestamp into the helper. By default an unknown,
+unavailable or package-mismatched sensor retains only an app alarm already
+acknowledged in the panel's Day Plan Signature. This covers Android clearing its
+sensor at alarm time. Explicitly disable App Import to cancel it. Optional Clear
+mode removes the override and uses calendar/regular instead. A helper without a
+previously committed alarm cannot invent a retained alarm. The helper uses a past
+sentinel when no valid/retained source exists. An explicit helper-only import is
 cancelled by disabling App Import or setting its helper to a past date.
 
 Sleep as Android must actually publish its alarm via this Android interface or an

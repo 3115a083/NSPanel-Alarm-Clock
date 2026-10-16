@@ -84,8 +84,7 @@ blueprint:
           description: >-
             Select one Companion next_alarm sensor, filtered to your alarm app.
             Or leave empty and let an authenticated app/integration update the
-            date-and-time helper. Unknown/unavailable sensor values remove the
-            app exception on the next successful sync and use calendar/regular.
+            date-and-time helper. Choose how missing sensor values are handled.
           default: []
           selector: {entity: {filter: {domain: sensor, device_class: timestamp}, multiple: true}}
         app_package:
@@ -93,6 +92,19 @@ blueprint:
           description: Copy the desired sensor Package attribute exactly. Blank accepts any package.
           default: ""
           selector: {text: {}}
+        app_missing_policy:
+          name: Missing app alarm value
+          description: >-
+            Android can clear next_alarm at alarm time or lose connectivity.
+            Keeping the already committed alarm prevents losing it. To cancel
+            it deliberately, switch App Import off. Clear mode instead falls
+            back to calendar/regular as soon as the sensor becomes invalid.
+          default: keep_committed
+          selector:
+            select:
+              options:
+                - {label: Keep an already committed app alarm, value: keep_committed}
+                - {label: Clear app alarm and use fallback, value: clear}
     calendar:
       name: Calendar wake range
       input:
@@ -148,6 +160,7 @@ variables:
   app_time_helper: !input app_time_helper
   app_entities: !input app_entities
   app_package: !input app_package
+  app_missing_policy: !input app_missing_policy
   calendar_enabled_helper: !input calendar_enabled_helper
   calendars: !input calendars
   lead_minutes: !input lead_minutes
@@ -224,8 +237,15 @@ actions:
       app_epoch: >-
         {% if app_on and app_entities | length == 1 %}
           {% set entity = app_entities[0] %}
-          {{ as_timestamp(states(entity), 0) | int(0)
-             if not app_package or state_attr(entity, 'Package') == app_package else 0 }}
+          {% set raw = as_timestamp(states(entity), 0) | int(0)
+             if not app_package or state_attr(entity, 'Package') == app_package else 0 %}
+          {% set saved = state_attr(app_time_helper, 'timestamp') | int(0) %}
+          {% set committed = states(day_plan_signature).split(':') %}
+          {% set known = committed | length == 6 and
+             ((committed[1] | int(0) == saved and committed[2] | int(0) == 1) or
+              (committed[4] | int(0) == saved and committed[5] | int(0) == 1)) %}
+          {{ raw if raw > as_timestamp(now()) - 900 else
+             saved if app_missing_policy == 'keep_committed' and known else 0 }}
         {% elif app_on %}
           {{ state_attr(app_time_helper, 'timestamp') | int(0) }}
         {% else %}0{% endif %}

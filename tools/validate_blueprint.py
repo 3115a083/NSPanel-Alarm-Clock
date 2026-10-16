@@ -42,6 +42,9 @@ async def render_plan():
     dt_util.set_default_time_zone(zone)
     with tempfile.TemporaryDirectory() as temp:
         hass = HomeAssistant(temp)
+        # cv.template needs the HA instance registered by its constructor,
+        # not just an asyncio loop. No live integration or device is started.
+        schema_fixtures()
         source = next(a['variables']['day_plans'] for a in blueprint.data['actions']
                       if 'day_plans' in a.get('variables', {}))
         current = datetime(2026,10,18,18,tzinfo=zone)
@@ -64,7 +67,6 @@ async def render_plan():
 
 async def main():
     # HA template schema validation needs a running event loop as well.
-    schema_fixtures()
     await render_plan()
 
 asyncio.run(main())
