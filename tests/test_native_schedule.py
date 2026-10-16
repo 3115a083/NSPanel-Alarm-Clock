@@ -24,7 +24,7 @@ class NativeSchedulerTests(unittest.TestCase):
         source.write_text("""
 #include <cstdlib>
 #include <iostream>
-#include "alarm_schedule.h"
+#include "nspanel_alarm_schedule_v2.h"
 int main(int argc, char **argv) {
   if (argc != 7 && argc != 13) return 2;
   setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);

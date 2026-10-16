@@ -20,7 +20,7 @@ time:
 # All scheduling data is saved across software restarts. ESPHome manages flash writes.
 esphome:
   includes:
-    - alarm_schedule.h
+    - nspanel_alarm_schedule_v2.h
 
 preferences:
   # Restored globals poll every second; sync pending writes at the same cadence.
@@ -101,6 +101,8 @@ api:
         source1: int
       then:
         - lambda: |-
+            static_assert(NSPANEL_ALARM_SCHEDULE_API_VERSION == 2,
+                          "Outdated alarm header: remove local header copies and clean build files");
             if (hour < 0 || hour > 23 || minute < 0 || minute > 59 ||
                 weekdays < 0 || weekdays > 127 || snooze_minutes < 1 ||
                 snooze_minutes > 60 || buzzer_grace_seconds < 0 ||
@@ -156,7 +158,8 @@ api:
             id(wa_buzzer_grace_s) = buzzer_grace_seconds;
             id(wa_enabled) = enabled;
             ESP_LOGI("wake_alarm", "Stored alarm %02d:%02d, mask=%d, enabled=%d",
-                     hour, minute, weekdays, enabled);
+                     static_cast<int>(hour), static_cast<int>(minute),
+                     static_cast<int>(weekdays), enabled);
     - action: alarm_snooze
       then:
         - script.execute: wa_do_snooze
@@ -215,7 +218,8 @@ script:
                 if (t.is_valid() && t.timestamp > 1735689600) {
                   id(wa_snooze_epoch) = (uint32_t)t.timestamp + id(wa_snooze_minutes) * 60;
                   id(wa_ringing) = false;
-                  ESP_LOGI("wake_alarm", "Snoozed until %u", id(wa_snooze_epoch));
+                  ESP_LOGI("wake_alarm", "Snoozed until %lu",
+                           static_cast<unsigned long>(id(wa_snooze_epoch)));
                 } else {
                   // No trusted clock, do NOT enter an indefinite silent snooze.
                   id(wa_snooze_epoch) = 0;

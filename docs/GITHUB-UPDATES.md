@@ -78,17 +78,38 @@ installed local alarm to run.
 
 ## Display and Home Assistant
 
-Keep the working Easy TFT and per-device Blueprint automation during this phase.
-No project clock TFT or project Blueprint has been released yet. The custom
-clock view remains a goal. A custom layout still needs a compatible TFT and
-firmware protocol; keeping Easy as base does not remove that maintenance.
-Future TFT download and Blueprint import URLs must name matched versions.
+Keep the working Easy per-device Blueprint automation for the base lifecycle.
+The optional project clock source and UI package are described in
+[TFT-BUILD.md](TFT-BUILD.md). The settings Blueprint and helper setup
+are described in [BLUEPRINT.md](BLUEPRINT.md). A custom layout still needs a
+compatible TFT and firmware protocol; keeping Easy as base does not remove
+that maintenance. A compiled project TFT is not published automatically.
 A source refresh must not upload a TFT or create competing base automations.
 
 ## Maintainer verification
 
-CI copies only the consumer device YAML into an isolated directory. It fetches
+CI initially copies only the consumer device YAML into an isolated directory. It fetches
 the alarm at the exact tested Git SHA, verifies header origin and byte equality,
 validates merged button hooks, encrypted OTA and offline timeouts, then compiles
 the split configuration. It also validates the old combined entry and compares
 its scripts, globals, API, OTA, Wi-Fi and time configuration with the split setup.
+It then compiles the optional UI with an actual historical v1 alarm_schedule.h
+beside the device YAML and in the old generated source directory. This verifies
+updates with leftover local files, rather than only fresh installations.
+
+## Build failure: missing DayPlan or too many arguments to due_date
+
+These errors together mean new alarm YAML was compiled against the old weekly-only
+header. ESPHome may select a header beside the device YAML before the remote
+package copy. A successful clean CI build did not cover that migration case.
+The package now directly includes nspanel_alarm_schedule_v2.h with an API version
+check, avoiding the old generic filename. alarm_schedule.h in this repository
+is only a compatibility include for source consumers.
+
+Update the alarm package from main. In ESPHome Device Builder choose **Clean Build
+Files**, then **Install > Wirelessly**. If an old alarm_schedule.h remains beside
+the device YAML, move it into your local backup folder, along with obsolete alarm
+YAML files. Remove an explicit local include of the old header if you added one.
+Keep the device YAML and secrets. No manual download of replacement headers is
+needed with the remote package setup. The firmware build checks both matching
+generated header bytes and absence of the old header include.
