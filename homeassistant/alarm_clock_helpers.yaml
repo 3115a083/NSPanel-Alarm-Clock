@@ -1,0 +1,16 @@
+# Optional companion package for the blueprint. No automations or device IDs.
+# Copy to /config/packages/alarm_clock_helpers.yaml with HA packages enabled.
+# Helpers restore their values. First installation starts disabled.
+input_boolean:
+  nspanel_alarm_enabled: {name: NSPanel Alarm Enabled, icon: mdi:alarm-check}
+  nspanel_alarm_app_enabled: {name: NSPanel App Alarm Import, icon: mdi:cellphone}
+  nspanel_alarm_calendar_enabled: {name: NSPanel Calendar Alarms, icon: mdi:calendar-clock}
+input_datetime:
+  nspanel_alarm_time:
+    name: NSPanel Regular Alarm Time
+    has_date: false
+    has_time: true
+  nspanel_alarm_app_time:
+    name: NSPanel Imported App Alarm
+    has_date: true
+    has_time: true

@@ -1,0 +1,338 @@
+blueprint:
+  name: NSPanel Alarm Clock | Settings, App Import and Calendar
+  description: >-
+    Configure the local NSPanel alarm. Priority per date: valid app alarm,
+    calendar wake time inside the selected range, regular weekly alarm.
+    Dated exceptions cover today and tomorrow and are stored on the panel.
+    Keep the NSPanel Easy base automation for its display/settings handshake.
+    Disable the old wecker_schedule_sync automation to avoid competing writers.
+    Requires current Alarm Clock firmware with alarm_apply_plan/alarm_disable.
+    Helpers can be created in the UI or from alarm_clock_helpers.yaml.
+    This blueprint does not create helpers, upload firmware or control relays.
+  domain: automation
+  source_url: https://github.com/3115a083/NSPanel-Alarm-Clock/blob/main/homeassistant/blueprints/nspanel_alarm_settings.yaml
+  homeassistant:
+    min_version: 2026.10.1
+  input:
+    panel:
+      name: NSPanel device
+      input:
+        panel_name_entity:
+          name: Device Name sensor
+          description: Select the NSPanel Easy Device Name sensor of this panel.
+          selector:
+            entity:
+              filter: {domain: sensor, integration: esphome}
+        config_signature:
+          name: Alarm Clock Configuration Signature sensor
+          selector:
+            entity:
+              filter: {domain: sensor, integration: esphome}
+        day_plan_signature:
+          name: Alarm Clock Day Plan Signature sensor
+          selector:
+            entity:
+              filter: {domain: sensor, integration: esphome}
+    regular:
+      name: Regular alarm
+      input:
+        enabled_helper:
+          name: Master enabled helper
+          default: input_boolean.nspanel_alarm_enabled
+          selector: {entity: {filter: {domain: input_boolean}}}
+        time_helper:
+          name: Regular alarm time helper (time only)
+          default: input_datetime.nspanel_alarm_time
+          selector: {entity: {filter: {domain: input_datetime}}}
+        weekdays:
+          name: Regular alarm weekdays
+          description: Leave empty to use only app/calendar alarms.
+          default: [mon, tue, wed, thu, fri]
+          selector:
+            select:
+              multiple: true
+              options:
+                - {label: Monday, value: mon}
+                - {label: Tuesday, value: tue}
+                - {label: Wednesday, value: wed}
+                - {label: Thursday, value: thu}
+                - {label: Friday, value: fri}
+                - {label: Saturday, value: sat}
+                - {label: Sunday, value: sun}
+        snooze_minutes:
+          name: Snooze minutes
+          default: 9
+          selector: {number: {min: 1, max: 60, step: 1, mode: box}}
+        buzzer_grace:
+          name: Mandatory buzzer delay in seconds
+          description: Use 0 for immediate buzzer. Remote audio never disables it.
+          default: 15
+          selector: {number: {min: 0, max: 120, step: 1, mode: box}}
+    app:
+      name: App alarm import
+      input:
+        app_enabled_helper:
+          name: Enable app alarm import helper
+          default: input_boolean.nspanel_alarm_app_enabled
+          selector: {entity: {filter: {domain: input_boolean}}}
+        app_time_helper:
+          name: Imported alarm helper (date AND time)
+          default: input_datetime.nspanel_alarm_app_time
+          selector: {entity: {filter: {domain: input_datetime}}}
+        app_entities:
+          name: Android next alarm sensor (zero or one)
+          description: >-
+            Select one Companion next_alarm sensor, filtered to your alarm app.
+            Or leave empty and let an authenticated app/integration update the
+            date-and-time helper. Choose how missing sensor values are handled.
+          default: []
+          selector: {entity: {filter: {domain: sensor, device_class: timestamp}, multiple: true}}
+        app_package:
+          name: Required Android Package attribute (optional)
+          description: Copy the desired sensor Package attribute exactly. Blank accepts any package.
+          default: ""
+          selector: {text: {}}
+        app_missing_policy:
+          name: Missing app alarm value
+          description: >-
+            Android can clear next_alarm at alarm time or lose connectivity.
+            Keeping the already committed alarm prevents losing it. To cancel
+            it deliberately, switch App Import off. Clear mode instead falls
+            back to calendar/regular as soon as the sensor becomes invalid.
+          default: keep_committed
+          selector:
+            select:
+              options:
+                - {label: Keep an already committed app alarm, value: keep_committed}
+                - {label: Clear app alarm and use fallback, value: clear}
+    calendar:
+      name: Calendar wake range
+      input:
+        calendar_enabled_helper:
+          name: Enable calendar alarms helper
+          default: input_boolean.nspanel_alarm_calendar_enabled
+          selector: {entity: {filter: {domain: input_boolean}}}
+        calendars:
+          name: Calendars to inspect
+          default: []
+          selector: {entity: {filter: {domain: calendar}, multiple: true}}
+        lead_minutes:
+          name: Minutes before appointment
+          default: 30
+          selector: {number: {min: 0, max: 240, step: 1, mode: box}}
+        earliest:
+          name: Earliest allowed calendar wake time
+          default: "06:00:00"
+          selector: {time: {}}
+        latest:
+          name: Latest allowed calendar wake time
+          description: >-
+            Inclusive, same-day range. Outside it the regular alarm applies.
+            Example latest 08:30, lead 30: an 08:00 event wakes at 07:30,
+            a 10:00 event is ignored. All-day events are ignored.
+          default: "08:30:00"
+          selector: {time: {}}
+        calendar_mode:
+          name: Calendar priority
+          default: in_range
+          selector:
+            select:
+              options:
+                - {label: Use calendar wake time inside range, value: in_range}
+                - {label: Only move the regular alarm earlier, value: earlier_only}
+        calendar_free_days:
+          name: Allow calendar alarms on unselected weekdays
+          default: false
+          selector: {boolean: {}}
+
+mode: restart
+max_exceeded: silent
+variables:
+  panel_name_entity: !input panel_name_entity
+  config_signature: !input config_signature
+  day_plan_signature: !input day_plan_signature
+  enabled_helper: !input enabled_helper
+  time_helper: !input time_helper
+  weekdays: !input weekdays
+  snooze_minutes: !input snooze_minutes
+  buzzer_grace: !input buzzer_grace
+  app_enabled_helper: !input app_enabled_helper
+  app_time_helper: !input app_time_helper
+  app_entities: !input app_entities
+  app_package: !input app_package
+  app_missing_policy: !input app_missing_policy
+  calendar_enabled_helper: !input calendar_enabled_helper
+  calendars: !input calendars
+  lead_minutes: !input lead_minutes
+  earliest: !input earliest
+  latest: !input latest
+  calendar_mode: !input calendar_mode
+  calendar_free_days: !input calendar_free_days
+triggers:
+  - trigger: homeassistant
+    event: start
+  - trigger: event
+    event_type: automation_reloaded
+  - trigger: time_pattern
+    minutes: /5
+  - trigger: state
+    entity_id:
+      - !input panel_name_entity
+      - !input config_signature
+      - !input day_plan_signature
+      - !input enabled_helper
+      - !input time_helper
+      - !input app_enabled_helper
+      - !input app_time_helper
+      - !input calendar_enabled_helper
+  - trigger: state
+    entity_id: !input app_entities
+  - trigger: state
+    entity_id: !input calendars
+actions:
+  - variables:
+      panel_name: "{{ states(panel_name_entity) | trim }}"
+      master: "{{ is_state(enabled_helper, 'on') }}"
+      calendar_on: "{{ is_state(calendar_enabled_helper, 'on') }}"
+      app_on: "{{ is_state(app_enabled_helper, 'on') }}"
+      weekmask: >-
+        {% set ns = namespace(mask=0) %}
+        {% for day in ['mon','tue','wed','thu','fri','sat','sun'] %}
+          {% if day in weekdays %}{% set ns.mask = ns.mask + 2 ** loop.index0 %}{% endif %}
+        {% endfor %}
+        {{ ns.mask }}
+  - condition: template
+    value_template: "{{ panel_name | regex_match('^[a-z][a-z0-9_-]{0,62}$') }}"
+  - if: "{{ states(enabled_helper) == 'off' }}"
+    then:
+      - variables:
+          disable_action: "{{ 'esphome.' ~ panel_name | replace('-', '_') ~ '_alarm_disable' }}"
+      - condition: template
+        value_template: "{{ has_service('esphome', disable_action.split('.')[1]) }}"
+      - action: "{{ disable_action }}"
+      - stop: Future alarms disabled. A currently ringing alarm still needs Stop.
+  - condition: template
+    value_template: >-
+      {{ panel_name | regex_match('^[a-z][a-z0-9_-]{0,62}$') and
+         states(enabled_helper) in ['on','off'] and
+         states(app_enabled_helper) in ['on','off'] and
+         states(calendar_enabled_helper) in ['on','off'] and
+         state_attr(time_helper, 'has_time') == true and
+         state_attr(time_helper, 'has_date') == false and
+         state_attr(time_helper, 'hour') is number and
+         state_attr(time_helper, 'minute') is number and
+         state_attr(app_time_helper, 'has_time') == true and
+         state_attr(app_time_helper, 'has_date') == true and
+         app_entities | length <= 1 and earliest <= latest }}
+  - variables:
+      plans_action: "{{ 'esphome.' ~ panel_name | replace('-', '_') ~ '_alarm_apply_plan' }}"
+      regular_hour: "{{ state_attr(time_helper, 'hour') | int }}"
+      regular_minute: "{{ state_attr(time_helper, 'minute') | int }}"
+  - condition: template
+    value_template: >-
+      {{ has_service('esphome', plans_action.split('.')[1]) }}
+  - variables:
+      expected_config: "{{ [1 if master else 0, weekmask, regular_hour, regular_minute, snooze_minutes | int, buzzer_grace | int] | join(':') }}"
+  - variables:
+      app_epoch: >-
+        {% if app_on and app_entities | length == 1 %}
+          {% set entity = app_entities[0] %}
+          {% set raw = as_timestamp(states(entity), 0) | int(0)
+             if not app_package or state_attr(entity, 'Package') == app_package else 0 %}
+          {% set saved = state_attr(app_time_helper, 'timestamp') | int(0) %}
+          {% set committed = states(day_plan_signature).split(':') %}
+          {% set known = committed | length == 6 and
+             ((committed[1] | int(0) == saved and committed[2] | int(0) == 1) or
+              (committed[4] | int(0) == saved and committed[5] | int(0) == 1)) %}
+          {{ raw if raw > as_timestamp(now()) - 900 else
+             saved if app_missing_policy == 'keep_committed' and known else 0 }}
+        {% elif app_on %}
+          {{ state_attr(app_time_helper, 'timestamp') | int(0) }}
+        {% else %}0{% endif %}
+  - if: "{{ app_on and app_entities | length == 1 }}"
+    then:
+      - variables:
+          mirror_epoch: "{{ app_epoch if app_epoch > as_timestamp(now()) - 900 else as_timestamp('2000-01-01T00:00:00+00:00') | int }}"
+      - if: "{{ state_attr(app_time_helper, 'timestamp') | int(0) != mirror_epoch }}"
+        then:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: !input app_time_helper
+            data:
+              timestamp: "{{ mirror_epoch }}"
+  - variables:
+      calendar_reply: {}
+  - if: "{{ master and calendar_on and calendars | length > 0 }}"
+    then:
+      - action: calendar.get_events
+        continue_on_error: true
+        target:
+          entity_id: !input calendars
+        data:
+          start_date_time: "{{ today_at('00:00').isoformat() }}"
+          end_date_time: "{{ (today_at('00:00') + timedelta(days=2, minutes=lead_minutes | int)).isoformat() }}"
+        response_variable: calendar_reply
+      - if: >-
+          {% set ns = namespace(ok=true) %}
+          {% for entity in calendars %}
+            {% if entity not in calendar_reply or calendar_reply[entity].get('events') is not iterable %}
+              {% set ns.ok = false %}
+            {% endif %}
+          {% endfor %}
+          {{ not ns.ok }}
+        then:
+          - stop: Calendar query failed. Keeping the last dated panel plan until it expires or a later successful sync.
+            error: true
+  - variables:
+      day_plans: >-
+        {% set result = namespace(slots=[]) %}
+        {% for offset in [0,1] %}
+          {% set day = today_at('00:00') + timedelta(days=offset) %}
+          {% set date = day.strftime('%Y%m%d') | int %}
+          {% set normal = ['mon','tue','wed','thu','fri','sat','sun'][day.weekday()] in weekdays %}
+          {% set chosen = namespace(epoch=0, source=0, calendar=0) %}
+          {% if master and app_on and app_epoch > as_timestamp(now()) - 900 and
+                (app_epoch | timestamp_custom('%Y%m%d', true)) | int == date %}
+            {% set chosen.epoch = app_epoch | int %}
+            {% set chosen.source = 1 %}
+          {% elif master and calendar_on and (normal or calendar_free_days) %}
+            {% for entity in calendars %}
+              {% for event in calendar_reply.get(entity, {}).get('events', []) %}
+                {% set raw = event.get('start', '') %}
+                {% set epoch = as_timestamp(raw, 0) - (lead_minutes | int) * 60 if ':' in raw else 0 %}
+                {% if epoch > as_timestamp(now()) - 900 and
+                      (epoch | timestamp_custom('%Y%m%d', true)) | int == date %}
+                  {% set clock = epoch | timestamp_custom('%H:%M:%S', true) %}
+                  {% set earlier = not normal or clock < '%02d:%02d:00' | format(regular_hour, regular_minute) %}
+                  {% if earliest <= clock <= latest and
+                        (calendar_mode == 'in_range' or earlier) and
+                        (chosen.calendar == 0 or epoch < chosen.calendar) %}
+                    {% set chosen.calendar = epoch | int %}
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+            {% if chosen.calendar > 0 %}
+              {% set chosen.epoch = chosen.calendar %}{% set chosen.source = 2 %}
+            {% endif %}
+          {% endif %}
+          {% set result.slots = result.slots + [[date if chosen.epoch else 0, chosen.epoch, chosen.source]] %}
+        {% endfor %}
+        {{ result.slots }}
+      expected_plans: "{{ (day_plans[0] + day_plans[1]) | join(':') }}"
+  - if: "{{ states(day_plan_signature) != expected_plans or states(config_signature) != expected_config }}"
+    then:
+      - action: "{{ plans_action }}"
+        data:
+          enabled: "{{ master }}"
+          hour: "{{ regular_hour }}"
+          minute: "{{ regular_minute }}"
+          weekdays: "{{ weekmask }}"
+          snooze_minutes: "{{ snooze_minutes | int }}"
+          buzzer_grace_seconds: "{{ buzzer_grace | int }}"
+          date0: "{{ day_plans[0][0] }}"
+          epoch0: "{{ day_plans[0][1] }}"
+          source0: "{{ day_plans[0][2] }}"
+          date1: "{{ day_plans[1][0] }}"
+          epoch1: "{{ day_plans[1][1] }}"
+          source1: "{{ day_plans[1][2] }}"

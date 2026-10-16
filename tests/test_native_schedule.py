@@ -26,12 +26,23 @@ class NativeSchedulerTests(unittest.TestCase):
 #include <iostream>
 #include "alarm_schedule.h"
 int main(int argc, char **argv) {
-  if (argc != 7) return 2;
+  if (argc != 7 && argc != 13) return 2;
   setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
   tzset();
-  std::cout << wake_alarm::due_date(std::stoll(argv[1]), std::stoi(argv[2]),
-      std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]));
-  return std::stoi(argv[6]);
+  std::array<wake_alarm::DayPlan,2> plans{};
+  if (argc == 13) {
+    plans = {{{std::stoi(argv[7]), std::stoll(argv[8]), std::stoi(argv[9])},
+              {std::stoi(argv[10]), std::stoll(argv[11]), std::stoi(argv[12])}}};
+  }
+  if (std::stoi(argv[6]) == 2)
+    std::cout << wake_alarm::valid_plan(plans[0], std::stoll(argv[1]));
+  else if (std::stoi(argv[6]) == 1)
+    std::cout << wake_alarm::next_alarm(std::stoll(argv[1]), std::stoi(argv[2]),
+        std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), plans).epoch;
+  else
+    std::cout << wake_alarm::due_date(std::stoll(argv[1]), std::stoi(argv[2]),
+        std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), plans);
+  return 0;
 }
 """, encoding="utf-8")
         cls.exe = pathlib.Path(cls.tmp.name) / "scheduler"
@@ -76,3 +87,38 @@ int main(int argc, char **argv) {
     def test_invalid_config_fails_closed(self):
         for hour, minute, mask in [(24, 30, 127), (6, 60, 127), (6, 30, 128), (6, 30, 0)]:
             self.assertEqual(self.due("2026-10-12T06:30:00", hour, minute, mask), 0)
+
+    def with_plan(self, now, planned='2026-10-19T07:30:00', date=20261019, mask=31, last=0, next_alarm=False):
+        stamp = lambda s: int(datetime.fromisoformat(s).replace(tzinfo=BERLIN).timestamp())
+        args = [stamp(now), 7, 0, mask, last, int(next_alarm), date, stamp(planned), 2, 0, 0, 0]
+        return int(subprocess.check_output([str(self.exe), *map(str,args)], text=True))
+
+    def test_dated_later_alarm_suppresses_regular_only_on_that_date(self):
+        self.assertEqual(self.with_plan('2026-10-19T07:00:00'), 0)
+        self.assertEqual(self.with_plan('2026-10-19T07:30:00'), 20261019)
+        self.assertEqual(self.with_plan('2026-10-20T07:00:00'), 20261020)
+
+    def test_dated_alarm_works_without_weekdays_but_does_not_repeat_after_stop(self):
+        self.assertEqual(self.with_plan('2026-10-19T07:30:00', mask=0), 20261019)
+        self.assertEqual(self.with_plan('2026-10-19T07:30:00', last=20261019), 0)
+
+    def test_corrupt_restored_date_does_not_suppress_regular_alarm(self):
+        self.assertEqual(self.with_plan('2026-10-19T07:00:00', date=20261020), 20261019)
+
+    def test_next_alarm_uses_same_exception_as_scheduler(self):
+        expected = int(datetime(2026,10,19,7,30,tzinfo=BERLIN).timestamp())
+        self.assertEqual(self.with_plan('2026-10-19T06:00:00', next_alarm=True), expected)
+
+    def test_plan_validation_rejects_date_mismatch_expired_far_future_and_source(self):
+        now = int(datetime(2026,10,19,6,tzinfo=BERLIN).timestamp())
+        planned = now + 3600
+        def valid(date, stamp, source):
+            args = [now,7,0,31,0,2,date,stamp,source,0,0,0]
+            return int(subprocess.check_output([str(self.exe), *map(str,args)], text=True))
+        self.assertEqual(valid(0,0,0), 1)
+        self.assertEqual(valid(20261019,planned,1), 1)
+        self.assertEqual(valid(20261020,planned,1), 0)
+        self.assertEqual(valid(20261019,now-901,1), 0)
+        self.assertEqual(valid(20261023,now+4*86400,2), 0)
+        self.assertEqual(valid(20261019,planned,3), 0)
+

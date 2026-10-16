@@ -16,7 +16,7 @@ def construct_tag(loader, node):
         return loader.construct_sequence(node)
     return loader.construct_mapping(node)
 
-for tag in ("!secret", "!include", "!extend", "!remove", "!lambda", "!env_var"):
+for tag in ("!secret", "!include", "!extend", "!remove", "!lambda", "!env_var", "!input"):
     Loader.add_constructor(tag, construct_tag)
 
 class ConfigTests(unittest.TestCase):

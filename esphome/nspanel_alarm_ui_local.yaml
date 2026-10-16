@@ -132,11 +132,35 @@ interval:
           }
           id(wa_ui_was_ringing) = id(wa_ringing);
           const auto now = id(time_provider).now();
-          const auto view = wake_alarm::clock_view(
+          auto view = wake_alarm::clock_view(
               now.is_valid() && now.timestamp > 1735689600,
               now.hour, now.minute, now.year, now.month, now.day_of_month,
               id(wa_enabled), id(wa_hour), id(wa_minute), id(wa_weekmask),
               id(wa_ringing), id(wa_unacknowledged));
+          if (id(wa_enabled) && now.is_valid() && now.timestamp > 1735689600) {
+            const auto next = wake_alarm::next_alarm(now.timestamp,
+                id(wa_hour), id(wa_minute), id(wa_weekmask), id(wa_last_fired_ymd),
+                {{{id(wa_plan_date0), id(wa_plan_epoch0), id(wa_plan_source0)},
+                  {id(wa_plan_date1), id(wa_plan_epoch1), id(wa_plan_source1)}}});
+            if (next.epoch > 0) {
+              const time_t epoch = next.epoch;
+              std::tm local{};
+              localtime_r(&epoch, &local);
+              char text[40];
+              snprintf(text, sizeof(text), "%02d:%02d", local.tm_hour, local.tm_min);
+              view.text[4] = text;
+              view.text[3] = next.source == 1 ? "APP ALARM" :
+                             next.source == 2 ? "CALENDAR ALARM" : "NEXT ALARM";
+              snprintf(text, sizeof(text), "%04d-%02d-%02d", local.tm_year + 1900,
+                       local.tm_mon + 1, local.tm_mday);
+              view.text[6] = text;
+              if (!id(wa_unacknowledged)) view.text[0] = "Armed";
+            } else if (!id(wa_unacknowledged)) {
+              view.text[0] = "No alarm";
+              view.text[3] = "NEXT ALARM";
+              view.text[4] = "--:--";
+            }
+          }
           wake_alarm::clock_renderer().render(view, [](const char *name, const std::string &text) {
             disp1->set_component_text(name, text.c_str());
           });
