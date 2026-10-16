@@ -34,7 +34,9 @@ int main(int argc, char **argv) {
     plans = {{{std::stoi(argv[7]), std::stoll(argv[8]), std::stoi(argv[9])},
               {std::stoi(argv[10]), std::stoll(argv[11]), std::stoi(argv[12])}}};
   }
-  if (std::stoi(argv[6]) == 1)
+  if (std::stoi(argv[6]) == 2)
+    std::cout << wake_alarm::valid_plan(plans[0], std::stoll(argv[1]));
+  else if (std::stoi(argv[6]) == 1)
     std::cout << wake_alarm::next_alarm(std::stoll(argv[1]), std::stoi(argv[2]),
         std::stoi(argv[3]), std::stoi(argv[4]), std::stoi(argv[5]), plans).epoch;
   else
@@ -106,4 +108,17 @@ int main(int argc, char **argv) {
     def test_next_alarm_uses_same_exception_as_scheduler(self):
         expected = int(datetime(2026,10,19,7,30,tzinfo=BERLIN).timestamp())
         self.assertEqual(self.with_plan('2026-10-19T06:00:00', next_alarm=True), expected)
+
+    def test_plan_validation_rejects_date_mismatch_expired_far_future_and_source(self):
+        now = int(datetime(2026,10,19,6,tzinfo=BERLIN).timestamp())
+        planned = now + 3600
+        def valid(date, stamp, source):
+            args = [now,7,0,31,0,2,date,stamp,source,0,0,0]
+            return int(subprocess.check_output([str(self.exe), *map(str,args)], text=True))
+        self.assertEqual(valid(0,0,0), 1)
+        self.assertEqual(valid(20261019,planned,1), 1)
+        self.assertEqual(valid(20261020,planned,1), 0)
+        self.assertEqual(valid(20261019,now-901,1), 0)
+        self.assertEqual(valid(20261023,now+4*86400,2), 0)
+        self.assertEqual(valid(20261019,planned,3), 0)
 

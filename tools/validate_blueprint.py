@@ -21,20 +21,21 @@ fixtures = [
     {'app_entities': ['sensor.fixture_next_alarm'], 'calendars': ['calendar.fixture']},
     {'calendars': ['calendar.one', 'calendar.two'], 'weekdays': []},
 ]
-for extra in fixtures:
-    inputs = BlueprintInputs(blueprint, {'alias': 'Compile-only fixture', 'use_blueprint': {
-        'path': 'fixture.yaml', 'input': {
-            'panel_name_entity': 'sensor.fixture_device_name',
-            'config_signature': 'sensor.fixture_config_signature',
-            'day_plan_signature': 'sensor.fixture_day_plan_signature', **extra}}})
-    inputs.validate()
-    for key, value in inputs.inputs_with_default.items():
-        definition = blueprint.inputs[key]
-        if definition and 'selector' in definition:
-            selector.selector(definition['selector'])(value)
-    automation = inputs.async_substitute()
-    PLATFORM_SCHEMA(automation)
-print('Home Assistant 2026.10.1 blueprint metadata, selectors, substitution and automation/action schema passed (3 fixtures).')
+def schema_fixtures():
+    for extra in fixtures:
+        inputs = BlueprintInputs(blueprint, {'alias': 'Compile-only fixture', 'use_blueprint': {
+            'path': 'fixture.yaml', 'input': {
+                'panel_name_entity': 'sensor.fixture_device_name',
+                'config_signature': 'sensor.fixture_config_signature',
+                'day_plan_signature': 'sensor.fixture_day_plan_signature', **extra}}})
+        inputs.validate()
+        for key, value in inputs.inputs_with_default.items():
+            definition = blueprint.inputs[key]
+            if definition and 'selector' in definition:
+                selector.selector(definition['selector'])(value)
+        automation = inputs.async_substitute()
+        PLATFORM_SCHEMA(automation)
+    print('Home Assistant 2026.10.1 blueprint metadata, selectors, substitution and automation/action schema passed (3 fixtures).')
 
 async def render_plan():
     zone = ZoneInfo('Europe/Berlin')
@@ -61,4 +62,9 @@ async def render_plan():
                 assert result[1][1] == int(datetime(2026,10,19,7,30,tzinfo=zone).timestamp())
         print('Actual Home Assistant template rendering passed: 08:00 -> 07:30, 10:00 -> weekly fallback.')
 
-asyncio.run(render_plan())
+async def main():
+    # HA template schema validation needs a running event loop as well.
+    schema_fixtures()
+    await render_plan()
+
+asyncio.run(main())
