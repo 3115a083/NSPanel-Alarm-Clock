@@ -149,14 +149,16 @@ interval:
               char text[40];
               snprintf(text, sizeof(text), "%02d:%02d", local.tm_hour, local.tm_min);
               view.text[4] = text;
-              view.text[3] = next.source == 1 ? "NEXT APP ALARM" :
-                             next.source == 2 ? "NEXT CALENDAR ALARM" : "NEXT ALARM";
+              view.text[3] = next.source == 1 ? "APP ALARM" :
+                             next.source == 2 ? "CALENDAR ALARM" : "NEXT ALARM";
               snprintf(text, sizeof(text), "%04d-%02d-%02d", local.tm_year + 1900,
                        local.tm_mon + 1, local.tm_mday);
               view.text[6] = text;
               if (!id(wa_unacknowledged)) view.text[0] = "Armed";
             } else if (!id(wa_unacknowledged)) {
               view.text[0] = "No alarm";
+              view.text[3] = "NEXT ALARM";
+              view.text[4] = "--:--";
             }
           }
           wake_alarm::clock_renderer().render(view, [](const char *name, const std::string &text) {
