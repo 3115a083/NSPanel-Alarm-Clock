@@ -112,6 +112,21 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(addon['wifi']['reboot_timeout'], '0s')
         self.assertEqual(addon['ota'][0]['encryption'], {})
 
+    def test_versioned_scheduler_avoids_legacy_local_header(self):
+        alarm = (ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8')
+        self.assertIn('    - nspanel_alarm_schedule_v2.h', alarm)
+        self.assertNotIn('    - alarm_schedule.h', alarm)
+        self.assertIn('static_assert(NSPANEL_ALARM_SCHEDULE_API_VERSION == 2', alarm)
+        header = (ROOT/'esphome/nspanel_alarm_schedule_v2.h').read_text(encoding='utf-8')
+        self.assertIn('#define NSPANEL_ALARM_SCHEDULE_API_VERSION 2', header)
+        self.assertIn('struct DayPlan', header)
+        shim = (ROOT/'esphome/alarm_schedule.h').read_text(encoding='utf-8')
+        self.assertIn('#include "nspanel_alarm_schedule_v2.h"', shim)
+        self.assertNotIn('inline int due_date', shim)
+        legacy = (ROOT/'tests/fixtures/alarm_schedule_v1.h').read_text(encoding='utf-8')
+        self.assertIn('inline int due_date(time_t now, int hour, int minute, int mask, int last_date)', legacy)
+        self.assertNotIn('DayPlan', legacy)
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -20,7 +20,7 @@ or newer. A working API connection alone does not prove display compatibility.
 Download from the same reviewed revision of this repository:
 
 - `esphome/nspanel_alarm_local.yaml`
-- `esphome/alarm_schedule.h`
+- `esphome/nspanel_alarm_schedule_v2.h`
 
 Place both in `/config/esphome/`, next to your existing device YAML. Preserve the
 filenames, including the `.h` suffix. This does not modify the running panel.

@@ -47,10 +47,11 @@ with tempfile.TemporaryDirectory(prefix="alarm-firmware-") as temp:
         else loader.construct_mapping(node))
     merged = yaml.load(result.stdout, Loader=ConfigLoader)
     includes = [Path(p) for p in merged["esphome"]["includes"]]
-    headers = [p for p in includes if p.name == "alarm_schedule.h"]
+    header_name = "nspanel_alarm_schedule_v2.h"
+    headers = [p for p in includes if p.name == header_name]
     if len(headers) != 1 or headers[0].parent == config:
         raise RuntimeError("Alarm header must resolve from the remote package checkout")
-    if headers[0].read_bytes() != (ROOT / "esphome/alarm_schedule.h").read_bytes():
+    if headers[0].read_bytes() != (ROOT / "esphome" / header_name).read_bytes():
         raise RuntimeError("Remote package header differs from the tested source")
     print("Remote YAML and matching C++ header resolved without local alarm files.")
     for hook in ["button_left_press_short", "button_right_press_short", "button_right_press_long"]:
@@ -68,6 +69,14 @@ with tempfile.TemporaryDirectory(prefix="alarm-firmware-") as temp:
     if merged["api"]["reboot_timeout"] != "0s" or merged["wifi"]["reboot_timeout"] != "0s":
         raise RuntimeError("Offline alarm must not reboot for loss of API/Wi-Fi")
     print("Merged alarm hooks, encrypted OTA and offline reboot policy verified.")
+
+    # Reproduce an existing installation, including both possible stale paths.
+    # The old header is deliberately left untouched throughout the full build.
+    legacy = (ROOT / "tests/fixtures/alarm_schedule_v1.h").read_bytes()
+    (config / "alarm_schedule.h").write_bytes(legacy)
+    source_dir = config / ".esphome/build/nspanel-schlafzimmer/src"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "alarm_schedule.h").write_bytes(legacy)
 
     # The previously published combined entry must keep the same behavior.
     prefix = device_text.split("packages:\n", 1)[0]
@@ -109,6 +118,12 @@ with tempfile.TemporaryDirectory(prefix="alarm-firmware-") as temp:
         print(ui_result.stdout)
     ui_result.check_returncode()
     ui_merged = yaml.load(ui_result.stdout, Loader=ConfigLoader)
+    schedule_headers = [Path(p) for p in ui_merged["esphome"]["includes"]
+                        if Path(p).name == header_name]
+    if (len(schedule_headers) != 1 or schedule_headers[0].parent == config
+            or schedule_headers[0].read_bytes() != (ROOT / "esphome" / header_name).read_bytes()
+            or any(Path(p).name == "alarm_schedule.h" for p in ui_merged["esphome"]["includes"])):
+        raise RuntimeError("Legacy local header shadows the remote scheduler")
     ui_headers = [Path(p) for p in ui_merged["esphome"]["includes"] if Path(p).name == "alarm_ui.h"]
     if len(ui_headers) != 1 or ui_headers[0].parent == config or ui_headers[0].read_bytes() != (ROOT / "esphome/alarm_ui.h").read_bytes():
         raise RuntimeError("Optional UI header must resolve from the tested remote checkout")
@@ -116,7 +131,22 @@ with tempfile.TemporaryDirectory(prefix="alarm-firmware-") as temp:
         if ui_merged[key] != merged[key]:
             raise RuntimeError("Optional UI changes core safety configuration: " + key)
     print("Optional clock UI and matching header resolve remotely; core safety configuration unchanged.")
-    subprocess.run([sys.executable, "-m", "esphome", "compile", path], check=True)
+    build = subprocess.run([sys.executable, "-m", "esphome", "compile", path],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False)
+    print(build.stdout)
+    build.check_returncode()
+    plain_log = re.sub(r"\x1b\[[0-9;]*m", "", build.stdout)
+    if re.search(r"nspanel_alarm_local\.yaml:\d+(?::\d+)?: warning:.*format", plain_log):
+        raise RuntimeError("Alarm logging has a target compiler format warning")
+    if (source_dir / header_name).read_bytes() != (ROOT / "esphome" / header_name).read_bytes():
+        raise RuntimeError("Generated scheduler header differs from the tested remote source")
+    generated = (source_dir / "main.cpp").read_text(encoding="utf-8")
+    if ('#include "' + header_name + '"' not in generated
+            or '#include "alarm_schedule.h"' in generated):
+        raise RuntimeError("Generated firmware includes the legacy scheduler")
+    if (config / "alarm_schedule.h").read_bytes() != legacy:
+        raise RuntimeError("Migration test unexpectedly changed the user's legacy file")
+    print("Legacy local/build header migration compiled successfully without deleting the local file.")
 
     defines = config / ".esphome/build/nspanel-schlafzimmer/src/esphome/core/defines.h"
     flags = defines.read_text(encoding="utf-8")
