@@ -1,0 +1,17 @@
+# Explicit migration profile, not an update to the existing Easy setup.
+# EU only. Export the accepted v2 HMI to this local TFT path before requesting upload.
+substitutions:
+  device_name: nspanel-alarm-example
+  friendly_name: NSPanel Alarm
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  alarm_tft_url: http://homeassistant.local:8123/local/nspanel_alarm_eu.tft
+packages:
+  alarm:
+    url: https://github.com/3115a083/NSPanel-Alarm-Clock
+    ref: main
+    refresh: always
+    files: [nspanel_alarm_standalone.yaml]
+api:
+  encryption:
+    key: !secret nspanel_api_encryption_key

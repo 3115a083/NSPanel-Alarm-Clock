@@ -49,7 +49,7 @@ class ConfigTests(unittest.TestCase):
         d = yaml.load((ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8'), Loader=Loader)
         self.assertEqual(d['time'][0]['platform'], 'sntp')
         self.assertEqual(d['time'][0]['timezone'], '${alarm_timezone}')
-        self.assertEqual(d['globals'][3]['initial_value'], 'false')
+        self.assertEqual(next(g for g in d['globals'] if g['id'] == 'wa_enabled')['initial_value'], 'false')
 
     def test_mandatory_buzzer_not_suppressed_by_audio_status(self):
         alarm = (ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8')

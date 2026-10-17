@@ -2,8 +2,16 @@
 esphome:
   includes:
     - alarm_ui.h
+  on_boot:
+    priority: -100
+    then:
+      - lambda: 'id(wa_ui_profile) = 1;'
 
 globals:
+  - id: wa_ui_easy_was_ready
+    type: bool
+    restore_value: no
+    initial_value: 'false'
   - id: wa_hmi_compatible
     type: bool
     restore_value: no
@@ -20,6 +28,16 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+
+text_sensor:
+  - platform: template
+    name: Alarm Clock Display Status
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: |-
+      if (!id(disp1).is_setup()) return {"display_disconnected"};
+      if (!id(wa_hmi_compatible)) return {"waiting_for_clock_v2_tft"};
+      return {id(wa_clock_page_ready) ? "clock_ready_v2" : "compatible_tft_other_page"};
 
 select:
   - platform: template
@@ -68,6 +86,8 @@ display:
       then:
         - lambda: |-
             id(wa_hmi_compatible) = false;
+            id(wa_ui_easy_was_ready) = false;
+            id(wa_ui_view_change) = true;
             id(wa_clock_page_ready) = false;
             id(wa_hmi_protocol).publish_state(false);
             id(wa_clock_protocol).publish_state(false);
@@ -96,6 +116,11 @@ interval:
           if (!id(wa_hmi_compatible) || !disp1->is_setup() ||
               system_flags.tft_upload_active || system_flags.ota_in_progress) return;
           const auto clock_page = get_page_id("home_smpl");
+          // Reassert the selected view once after Easy's late boot handoff.
+          // Local startup above still works without HA or Easy readiness.
+          const bool easy_ready = is_device_ready_for_tasks();
+          if (easy_ready && !id(wa_ui_easy_was_ready)) id(wa_ui_view_change) = true;
+          id(wa_ui_easy_was_ready) = easy_ready;
           const auto home = id(wa_start_view).current_option() == "Clock" ?
                             clock_page : get_page_id("home");
           // Own only home/wake routing, not Easy readiness or blueprint flags.
