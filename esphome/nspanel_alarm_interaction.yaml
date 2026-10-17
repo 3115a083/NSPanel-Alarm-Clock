@@ -1,4 +1,6 @@
 globals:
+  - {id: wa_pages_mask, type: int, restore_value: yes, initial_value: '3'}
+  - {id: wa_button_labels, type: bool, restore_value: yes, initial_value: 'true'}
   - {id: wa_schedule_enabled, type: bool, restore_value: yes, initial_value: 'false'}
   - {id: wa_schedule_start, type: int, restore_value: yes, initial_value: '1320'}
   - {id: wa_schedule_end, type: int, restore_value: yes, initial_value: '420'}
@@ -34,8 +36,50 @@ uart:
             const auto key = wake_alarm::panel_controls().touch(bytes, millis());
             if (key[0]) id(wa_ui_input).execute(std::string(key));
 
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          wake_alarm::panel_controls().set_pages(id(wa_pages_mask));
+          wake_alarm::panel_controls().show_button_labels=id(wa_button_labels);
 api:
   actions:
+    - action: alarm_page_settings
+      variables:
+        expected_device: string
+        expected_mac: string
+        page_mask: int
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) || page_mask<0 || page_mask>127) return;
+            id(wa_pages_mask)=page_mask|3;
+            wake_alarm::panel_controls().set_pages(id(wa_pages_mask));
+    - action: alarm_open_page
+      variables:
+        expected_device: string
+        expected_mac: string
+        page: int
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) || id(wa_unacknowledged) || wake_alarm::display_state().busy || wake_alarm::effects().notice.kind) return;
+            auto &ui=wake_alarm::panel_controls();
+            if (ui.set_page(page,id(wa_hour),id(wa_minute),id(wa_enabled))) ui.wake(millis());
+    - action: alarm_button_labels
+      variables:
+        expected_device: string
+        expected_mac: string
+        visible: bool
+        left_short: string
+        right_short: string
+        left_long: string
+        right_long: string
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address())) return;
+            id(wa_button_labels)=visible;
+            auto &ui=wake_alarm::panel_controls(); ui.show_button_labels=visible;
+            ui.custom_labels={wake_alarm::safe_text(left_short,8),wake_alarm::safe_text(right_short,8),wake_alarm::safe_text(left_long,8),wake_alarm::safe_text(right_long,8)};
     - action: alarm_night_schedule
       variables:
         expected_device: string
@@ -141,7 +185,8 @@ api:
             if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) ||
                 page_mask < 0 || page_mask > 127) return;
             auto &ui = wake_alarm::panel_controls();
-            ui.pages = page_mask | 3;
+            ui.set_pages(page_mask);
+            id(wa_pages_mask)=page_mask|3;
             const std::array<std::string, 12> values{weather, weather_detail, entity0, entity1, entity2, entity3,
                 climate, climate_detail, humidity, humidity_detail, agenda, agenda_detail};
             for (size_t i = 0; i < values.size(); ++i) {
@@ -152,7 +197,35 @@ api:
             ui.agenda_error = !agenda_valid;
             if (!(ui.pages & (1 << int(ui.page)))) ui.page = wake_alarm::PanelPage::CLOCK;
 
+interval:
+  - interval: 100ms
+    then:
+      - lambda: |-
+          if (id(wa_unacknowledged) || wake_alarm::display_state().busy || wake_alarm::effects().notice.kind) return;
+          const auto key=wake_alarm::panel_controls().repeat_touch(millis());
+          if (key[0]) id(wa_ui_input).execute(std::string(key));
+button:
+  - platform: template
+    name: Alarm Clock Pages Menu
+    on_press:
+      - script.execute: {id: wa_ui_input, key: menu}
+  - platform: template
+    name: Alarm Clock Next Page
+    on_press:
+      - script.execute: {id: wa_ui_input, key: forward}
+  - platform: template
+    name: Alarm Clock Previous Page
+    on_press:
+      - script.execute: {id: wa_ui_input, key: back}
 text_sensor:
+  - platform: template
+    name: Alarm Clock Available Pages
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: |-
+      const auto &ui=wake_alarm::panel_controls(); std::string names;
+      for (int i=0;i<7;++i) if (ui.pages&(1<<i)) { if (!names.empty()) names+=" / "; names+=wake_alarm::PanelControls::page_title(i); }
+      return {names};
   - platform: template
     name: Alarm Clock Current View
     entity_category: diagnostic
@@ -160,7 +233,7 @@ text_sensor:
     lambda: |-
       static const char *names[] = {"Clock", "Alarm", "Weather", "Entities", "Thermostat", "Humidifier", "Calendar"};
       const auto &ui = wake_alarm::panel_controls();
-      return {ui.dark ? "Night" : names[int(ui.page)]};
+      return {ui.dark ? "Night" : ui.menu_open ? "Pages" : names[int(ui.page)]};
   - platform: template
     id: wa_ui_config_snapshot
     name: Alarm Clock Local Edit
@@ -258,8 +331,9 @@ script:
             else if (key == "prev" && id(wa_ringing)) id(wa_do_snooze).execute();
             return;
           }
-          if (ui.page == wake_alarm::PanelPage::ALARM && (key == "minus" || key == "plus"))
-            key = key == "plus" ? "next" : "prev";
+          if (key=="preview_tone") {
+            id(wa_preview_tone).execute(id(wa_tone_preset)); return;
+          }
           const std::string action = ui.input(key, id(wa_hour), id(wa_minute), id(wa_enabled), millis());
           if (action == "save") {
             if (ui.draft_enabled && id(wa_weekmask) == 0) {

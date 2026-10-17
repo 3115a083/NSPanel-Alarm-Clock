@@ -24,6 +24,13 @@ inline std::string clock_digits(int hour, int minute, bool twelve) {
   snprintf(text, sizeof(text), "%02d:%02d", twelve ? (hour % 12 ? hour % 12 : 12) : hour, minute);
   return text;
 }
+inline std::string button_hint(int short_action,int long_action,const std::string &short_custom,const std::string &long_custom) {
+  static const char *names[]={"None","Snooze","Stop","Prev","Next","Edit","-","+","Custom"};
+  const auto label=[&](int action,const std::string &custom){
+    return action==8 ? safe_text(custom,8) : std::string(action>=0 && action<=8 ? names[action] : "None");
+  };
+  return "S:"+label(short_action,short_custom)+" H:"+label(long_action,long_custom);
+}
 inline std::string remaining_seconds(uint32_t deadline, uint32_t now) {
   const uint32_t left = deadline > now ? deadline - now : 0;
   char text[20];
@@ -46,6 +53,11 @@ struct NightSchedule {
 };
 struct PanelControls {
   PanelPage page{PanelPage::CLOCK};
+  bool menu_open{false};
+  bool show_button_labels{true};
+  std::array<std::string,4> custom_labels{{"Custom","Custom","Custom","Custom"}};
+  uint32_t repeat_ms{0};
+  bool repeated{false};
   uint8_t pages{3};  // Clock + regular alarm editor, other pages explicitly enabled.
   NightSchedule night_schedule;
   bool light_off{false}, light_valid{false};
@@ -77,7 +89,7 @@ struct PanelControls {
   void wake(uint32_t now) { activity_ms = now; dark = false; }
   void tick(uint32_t now, bool ringing, bool prewake) {
     if (prewake && dark) { page = PanelPage::CLOCK; editing = false; }
-    if (ringing) { wake(now); page = PanelPage::CLOCK; editing = false; auto_agenda = false; }
+    if (ringing) { menu_open=false; wake(now); page = PanelPage::CLOCK; editing = false; auto_agenda = false; }
     if (auto_agenda && uint32_t(now - agenda_started) >= uint32_t(agenda_after_stop_s) * 1000) {
       page = PanelPage::CLOCK; auto_agenda = false;
     }
@@ -86,14 +98,14 @@ struct PanelControls {
     if (!notice.empty() && uint32_t(now - notice_ms) >= 4000) notice.clear();
   }
   void begin_edit(int hour, int minute, bool enabled) {
-    page = PanelPage::ALARM; editing = true; edit_minute = false;
+    menu_open=false; page = PanelPage::ALARM; editing = true; edit_minute = false;
     draft_hour = hour; draft_minute = minute; draft_enabled = enabled;
   }
   void navigate(int direction) {
-    editing = false; auto_agenda = false;
+    menu_open=false; editing = false; auto_agenda = false;
     for (int i = 0; i < 7; ++i) {
       page = PanelPage((int(page) + direction + 7) % 7);
-      if (pages & (1 << int(page))) return;
+      if (page != PanelPage::ALARM && (pages & (1 << int(page)))) return;
     }
     page = PanelPage::CLOCK;
   }
@@ -103,26 +115,68 @@ struct PanelControls {
     }
     alarm_seen = false;
   }
+  bool set_page(int next, int hour, int minute, bool enabled) {
+    if (next<0 || next>6 || !(pages & (1<<next))) return false;
+    menu_open=false; auto_agenda=false; editing=false;
+    if (next==1) begin_edit(hour,minute,enabled); else page=PanelPage(next);
+    return true;
+  }
+  void set_pages(int mask) {
+    pages=(mask&127)|3;
+    if (!(pages & (1<<int(page)))) { page=PanelPage::CLOCK; editing=false; }
+  }
+  static const char *page_title(int index) {
+    static const char *names[]={"Clock","Set alarm","Weather","Entities","Thermostat","Humidifier","Calendar"};
+    return index>=0 && index<7 ? names[index] : "";
+  }
+  static const char *edit_key(int x) {
+    return x<130 ? "hour_down" : x<240 ? "hour_up" : x<350 ? "minute_down" : "minute_up";
+  }
+  const char *repeat_touch(uint32_t now) {
+    if (!touch_down || touch_consumed || menu_open || page!=PanelPage::ALARM ||
+        press_y<180 || press_y>=232 || uint32_t(now-press_ms)<500 || uint32_t(now-repeat_ms)<150) return "";
+    repeat_ms=now; repeated=true;
+    return edit_key(press_x);
+  }
   const char *input(const std::string &key, int hour, int minute, bool enabled, uint32_t now) {
     wake(now);
+    if (key=="menu") { menu_open=!menu_open; return ""; }
+    if (key.size()==6 && key.compare(0,5,"page_")==0) {
+      set_page(key[5]-'0',hour,minute,enabled); return "";
+    }
+    if (menu_open) {
+      if (key=="action" || key=="prev") { menu_open=false; return ""; }
+      if (key!="back" && key!="forward") return "";
+    }
     if (key == "back" || key == "forward") { navigate(key == "back" ? -1 : 1); return ""; }
+    if (key=="edit") { begin_edit(hour,minute,enabled); return ""; }
     if (page == PanelPage::ALARM && !editing) begin_edit(hour, minute, enabled);
     if (page == PanelPage::ALARM) {
+      if (key=="prev") { page=PanelPage::CLOCK; editing=false; return ""; }
+      if (key=="next") { menu_open=true; return ""; }
+      if (key=="hour") edit_minute=false;
+      if (key=="minute") edit_minute=true;
       if (key == "focus") edit_minute = !edit_minute;
       if (key == "enabled") draft_enabled = !draft_enabled;
-      if (key == "prev" || key == "next") {
-        const int delta = key == "next" ? 1 : -1;
-        if (edit_minute) draft_minute = (draft_minute + delta + 60) % 60;
-        else draft_hour = (draft_hour + delta + 24) % 24;
+      if (key=="hour_up" || key=="hour_down") {
+        edit_minute=false; draft_hour=(draft_hour+(key=="hour_up"?1:23))%24;
+      }
+      if (key=="minute_up" || key=="minute_down") {
+        edit_minute=true; draft_minute=(draft_minute+(key=="minute_up"?1:59))%60;
+      }
+      if (key=="minus" || key=="plus") {
+        const int delta=key=="plus"?1:-1;
+        if (edit_minute) draft_minute=(draft_minute+delta+60)%60;
+        else draft_hour=(draft_hour+delta+24)%24;
       }
       if (key == "action") return "save";
     } else if (key == "prev" || key == "next") navigate(key == "next" ? 1 : -1);
-    else if (key == "edit" || (key == "action" && page == PanelPage::CLOCK)) begin_edit(hour, minute, enabled);
+    else if (key == "action" && page == PanelPage::CLOCK) begin_edit(hour, minute, enabled);
     else if (page == PanelPage::CLIMATE || page == PanelPage::HUMIDIFIER) {
       if (key == "minus") return page == PanelPage::CLIMATE ? "climate_down" : "humidity_down";
       if (key == "plus") return page == PanelPage::CLIMATE ? "climate_up" : "humidity_up";
       if (key == "action") return page == PanelPage::CLIMATE ? "climate_toggle" : "humidity_toggle";
-    }
+    } else if (key=="action") menu_open=true;
     return "";
   }
   const char *touch(const std::vector<uint8_t> &bytes, uint32_t now) {
@@ -133,17 +187,31 @@ struct PanelControls {
     const uint16_t y = (uint16_t(bytes[3]) << 8) | bytes[4];
     if (x >= 480 || y >= 320) { touch_down = false; return ""; }
     if (bytes[5]) {
-      touch_consumed = dark; wake(now); touch_down = true;
+      touch_consumed = dark; wake(now); touch_down = true; repeated=false; repeat_ms=now;
       press_x = x; press_y = y; press_ms = now; return "";
     }
     if (!touch_down) return "";
     touch_down = false; wake(now);
-    if (touch_consumed || uint32_t(now - press_ms) > 3000) return "";
+    if (touch_consumed || repeated || uint32_t(now - press_ms) > 3000) return "";
     const int dx = int(x) - press_x;
     if (dx > 100) return "back";
     if (dx < -100) return "forward";
-    if (y >= 278) return x < 100 ? "prev" : x > 380 ? "next" : "action";
-    if (page == PanelPage::ALARM) return y < 170 ? "focus" : x > 260 ? "enabled" : "";
+    if (y>=294) return ""; // Physical-key labels are not touch buttons.
+    if (y>=264) return x<100 ? "prev" : x>380 ? "next" : "action";
+    if (menu_open) {
+      if (y<42) return "menu";
+      const int row=(y-42)/31; int current=0;
+      static const char *keys[]={"page_0","page_1","page_2","page_3","page_4","page_5","page_6"};
+      for (int i=0;i<7;++i) if (pages&(1<<i)) { if(current++==row) return keys[i]; }
+      return "";
+    }
+    if (y<40) return "menu";
+    if (page == PanelPage::ALARM) {
+      if (y>=44 && y<138) return x<240 ? "hour" : "minute";
+      if (y>=180 && y<232) return edit_key(x);
+      if (y>=234 && y<262) return x<240 ? "enabled" : "preview_tone";
+      return "";
+    }
     if (page == PanelPage::CLIMATE || page == PanelPage::HUMIDIFIER)
       return x < 240 ? "minus" : "plus";
     return y >= 190 && page == PanelPage::CLOCK ? "edit" : "";

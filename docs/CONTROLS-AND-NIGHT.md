@@ -19,8 +19,8 @@ time is not readable in a dark room. Adjust the lowest usable brightness on the
 device; software cannot promise that every panel's minimum glow is acceptable.
 
 Configure inactivity, dim/black/disabled mode, night brightness, awake brightness
-and optional pre-alarm illumination in the Blueprint's **Clock, screensaver and
-optional pages** section. Zero inactivity disables timeout. Prewake is off by
+and optional pre-alarm illumination in the Blueprint's **Screensaver and lights-out
+schedule** section. Zero inactivity disables timeout. Prewake is off by
 default. Ringing always wakes the clock at full brightness; Stop/Snooze returns
 to ordinary inactivity behavior. A first touch/button press in night mode only
 wakes the display, without accidentally editing or controlling anything.
@@ -53,12 +53,14 @@ Status labels use smaller fonts and short On/Off text to fit the EU viewport.
 
 | Gesture | Result |
 |---|---|
+| Tap top title | Open Pages menu with every configured page |
 | Swipe left/right | Next/previous enabled logical page |
 | Hold right/left physical button for at least 0.8 seconds | Next/previous page |
 | Bottom left/right arrow | Previous/next page |
 | Clock: tap alarm area or bottom Set alarm | Open regular alarm editor |
 | Editor: tap large time | Select hour or minute |
-| Editor: -/+ or short left/right physical button | Adjust selected field |
+| Editor: Hour - / Hour + / Min - / Min + | Adjust directly; hold to repeat |
+| Editor: configured decrease/increase physical button | Adjust selected field |
 | Editor: tap On/Off | Change draft enabled state |
 | Editor: Save | Save local weekly time and enabled state |
 | Editor: navigate away | Discard unsaved draft |

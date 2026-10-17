@@ -10,6 +10,28 @@ def walk(value):
         for child in value: yield from walk(child)
 
 class PanelBlueprintTests(unittest.TestCase):
+    def test_page_routing_precedes_optional_fetches_and_matches_cards(self):
+        actions=NEW['actions']
+        early=next(i for i,d in enumerate(actions) if 'pages_action' in d.get('variables',{}))
+        cards=next(d['data'] for d in walk(actions) if d.get('action')=='{{ cards_action }}')
+        mask=actions[early]['variables']['requested_page_mask']
+        for selected,expected in [([],3),(['weather.test'],7)]:
+            values=dict(weather_entities=selected,display_entities=[],climate_entities=[],humidifier_entities=[],agenda_calendars=[])
+            self.assertEqual(render(mask,values),expected)
+            self.assertEqual(render(mask,values),render(cards['page_mask'],values))
+        optional_fetch=next(i for i,d in enumerate(actions) if 'calendar.get_events' in str(d))
+        self.assertLess(early,optional_fetch)
+
+    def test_physical_label_setting_is_optional_and_identity_bound(self):
+        fields={name:field for section in NEW['blueprint']['input'].values() for name,field in section['input'].items()}
+        self.assertTrue(fields['show_button_labels']['default'])
+        data=next(d['data'] for d in walk(NEW['actions']) if d.get('action')=='{{ labels_action }}')
+        values=dict(snapshot=['NSPALARM1','panel','aa0011223344'],show_button_labels=False,
+            label_left_short='Lamp',label_right_short='Stop',label_left_long='Prev',label_right_long='Next')
+        self.assertFalse(render(data['visible'],values))
+        self.assertEqual(render(data['expected_mac'],values),'aa0011223344')
+        self.assertEqual(render(data['left_short'],values),'Lamp')
+
     def test_control_requires_opt_in_single_target_and_available_state(self):
         for kind,key,entity in [('climate','climate','climate.room'),('humidity','humidifier','humidifier.room')]:
             condition=next(d['conditions'] for d in walk(NEW['actions'])
@@ -49,7 +71,7 @@ class PanelBlueprintTests(unittest.TestCase):
         self.assertFalse(render(mirror,values))
 
     def test_night_defaults_and_optional_pages_are_explicit(self):
-        fields=NEW['blueprint']['input']['display']['input']
+        fields={name:field for section in NEW['blueprint']['input'].values() for name,field in section['input'].items()}
         self.assertEqual(fields['night_mode']['default'],'dim')
         self.assertEqual(fields['night_brightness']['default'],1)
         self.assertEqual(fields['clock_format']['default'],'24h')
@@ -59,18 +81,19 @@ class PanelBlueprintTests(unittest.TestCase):
         self.assertIn('calendars',NEW['blueprint']['input']['calendar']['input'])
 
     def test_button_mappings_cover_both_states_and_custom_sequences(self):
-        fields=NEW['blueprint']['input']['buttons']['input']
+        fields={name:field for section in NEW['blueprint']['input'].values() for name,field in section['input'].items()}
         gestures=['left_short','right_short','left_long','right_long']
         for state in ['normal','alarm']:
             for gesture in gestures:
                 field=fields[state+'_'+gesture]
-                self.assertIn(field['default'],field['selector']['select']['options'])
-                self.assertIn('custom',field['selector']['select']['options'])
+                options=[o['value'] if isinstance(o,dict) else o for o in field['selector']['select']['options']]
+                self.assertIn(field['default'],options)
+                self.assertIn('custom',options)
         self.assertEqual(fields['alarm_left_short']['default'],'snooze')
         self.assertEqual(fields['alarm_right_short']['default'],'stop')
         for gesture in gestures:
             self.assertEqual(fields['custom_'+gesture]['default'],[])
-        handler=next(d for d in walk(NEW['actions']) if isinstance(d.get('if'),str) and "trigger.id" in d['if'])
+        handler=next(d for d in walk(NEW['actions']) if isinstance(d.get('if'),str) and "trigger.id" in d['if'] and "tone_preview" not in d['if'])
         self.assertIn('snapshot[2]',handler['then'][0]['value_template'])
         branches=handler['then'][2]['choose']
         for gesture in gestures:

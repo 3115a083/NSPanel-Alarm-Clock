@@ -10,7 +10,7 @@ esphome:
       - lambda: 'id(wa_ui_profile) = 2;'
   project:
     name: nspanel_alarm.clock
-    version: 0.3.2-dev
+    version: 0.3.3-dev
 esp32:
   board: esp32dev
   framework:
@@ -28,6 +28,7 @@ ota:
     encryption: {}
     on_begin:
       - lambda: |-
+          if (wake_alarm::tone_preview().stop()) id(buzzer).stop();
           wake_alarm::effects().release_all([](int index,bool on){
             auto *output = index == 0 ? id(relay_1) : id(relay_2);
             if (on) output->turn_on(); else output->turn_off();

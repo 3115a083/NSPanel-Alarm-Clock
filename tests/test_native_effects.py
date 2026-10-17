@@ -20,6 +20,19 @@ class NativeEffectsTests(unittest.TestCase):
 #include "nspanel_alarm_effects_v1.h"
 using namespace wake_alarm;
 int main() {
+  TonePreview preview;
+  assert(!preview.begin(0,0,true,false));
+  assert(!preview.begin(0,0,false,true));
+  assert(!preview.begin(4,0,false,false));
+  assert(preview.begin(2,100,false,false));
+  assert(!preview.tick(5099,false,false));
+  assert(preview.tick(5100,false,false) && !preview.active);
+  assert(!preview.stop());
+  assert(preview.begin(0,0,false,false));
+  assert(preview.tick(1,true,false));
+  assert(!preview.tick(2,true,false)); // Never stop real alarm after preview relinquishes ownership.
+  assert(preview.begin(1,UINT32_MAX-1000,false,false));
+  assert(preview.tick(3999,false,false));
   std::vector<bool> writes;
   auto write=[&](bool on){writes.push_back(on);};
   AlarmRelay r;

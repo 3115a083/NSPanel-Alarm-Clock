@@ -32,6 +32,33 @@ int main() {
   assert(!ui_edit_pending(0,2,1));
   assert(!ui_edit_pending(2,2,2));
   assert(ui_edit_pending(2,2,1));
+  assert(button_hint(1,2,"x","y")=="S:Snooze H:Stop");
+  assert(button_hint(8,8,"Room lamp","Bad\"\\name")=="S:Room lam H:Bad  nam");
+  PanelControls nav;
+  nav.set_pages(127);
+  nav.input("next",6,30,false,0); assert(nav.page==PanelPage::WEATHER); // Editor never traps navigation.
+  nav.input("menu",6,30,false,1); assert(nav.menu_open);
+  nav.touch(packet(200,240,true),2);
+  assert(std::string(nav.touch(packet(200,240,false),3))=="page_6");
+  nav.input("page_6",6,30,false,4); assert(nav.page==PanelPage::AGENDA && !nav.menu_open);
+  nav.set_pages(3); assert(nav.page==PanelPage::CLOCK);
+  assert(!nav.set_page(6,6,30,false));
+  nav.input("edit",23,59,false,5);
+  nav.input("hour_up",0,0,false,6); assert(nav.draft_hour==0);
+  nav.input("minute_up",0,0,false,7); assert(nav.draft_minute==0);
+  nav.touch(packet(400,200,true),100);
+  assert(std::string(nav.repeat_touch(599)).empty());
+  assert(std::string(nav.repeat_touch(600))=="minute_up");
+  nav.input("minute_up",0,0,false,600);
+  assert(std::string(nav.repeat_touch(700)).empty());
+  assert(std::string(nav.touch(packet(400,200,false),800)).empty()); // No extra increment on release.
+  assert(nav.draft_minute==1);
+  nav.input("prev",6,30,false,801); assert(nav.page==PanelPage::CLOCK && !nav.editing); // Cancel discards.
+  nav.touch(packet(20,305,true),802);
+  assert(std::string(nav.touch(packet(20,305,false),803)).empty()); // Hints are not touch controls.
+  nav.touch(packet(20,280,true),804);
+  nav.tick(805,true,false); // Ringing render must not eat a paired touch release.
+  assert(std::string(nav.touch(packet(20,280,false),806))=="prev");
   NightSchedule night;
   assert(night.mode(1,720,true,false,false)==1); // All day by default.
   night.enabled=true;
@@ -53,23 +80,22 @@ int main() {
   PanelControls ui;
   ui.tick(29999,false,false); assert(!ui.dark);
   ui.tick(30000,false,false); assert(ui.dark);
-  ui.touch(packet(240,295,true),30001);
+  ui.touch(packet(240,280,true),30001);
   assert(!ui.dark);
-  assert(std::string(ui.touch(packet(240,295,false),30002)).empty()); // Wake only.
-  ui.touch(packet(240,295,true),30003);
-  assert(std::string(ui.touch(packet(240,295,false),30004))=="action");
+  assert(std::string(ui.touch(packet(240,280,false),30002)).empty()); // Wake only.
+  ui.touch(packet(240,280,true),30003);
+  assert(std::string(ui.touch(packet(240,280,false),30004))=="action");
   ui.input("action",6,30,false,30004);
   assert(ui.page==PanelPage::ALARM && ui.editing && !ui.draft_enabled);
-  ui.input("prev",0,0,false,30005); assert(ui.draft_hour==5);
+  ui.input("minus",0,0,false,30005); assert(ui.draft_hour==5);
   ui.input("focus",0,0,false,30006);
-  ui.input("next",0,0,false,30007); assert(ui.draft_minute==31);
+  ui.input("plus",0,0,false,30007); assert(ui.draft_minute==31);
   ui.input("enabled",0,0,false,30008); assert(ui.draft_enabled);
   assert(std::string(ui.input("action",0,0,false,30009))=="save");
   ui.input("forward",0,0,false,30010);
   assert(!ui.editing && ui.page==PanelPage::CLOCK); // Disabled pages skipped, draft discarded.
   ui.pages=3|16|32|64;
-  ui.input("forward",0,0,false,30011); assert(ui.page==PanelPage::ALARM);
-  ui.input("forward",0,0,false,30012); assert(ui.page==PanelPage::CLIMATE);
+  ui.input("forward",0,0,false,30011); assert(ui.page==PanelPage::CLIMATE);
   assert(std::string(ui.input("plus",0,0,false,30013))=="climate_up");
   ui.touch(packet(100,100,true),30014);
   assert(std::string(ui.touch(packet(400,100,false),30015))=="back");
