@@ -154,10 +154,19 @@ actions:
       kind: "{{ 1 if source_kind == 'door' else 2 }}"
       show_action: "{{ 'esphome.' ~ snapshot[1] | replace('-','_') ~ '_alarm_show_notice' }}"
   - condition: template
-    value_template: "{{ sources | length == 1 and states(sources[0]) in ['on','triggered'] and has_service('esphome',show_action.split('.')[1]) }}"
+    value_template: >-
+      {{ sources | length == 1 and has_service('esphome',show_action.split('.')[1]) and
+         ((trigger is defined and trigger.id | default('startup') in ['door','alert'] and
+           trigger.to_state is defined and trigger.to_state is not none and
+           trigger.to_state.entity_id == sources[0] and trigger.to_state.state in ['on','triggered']) or
+          states(sources[0]) in ['on','triggered']) }}
   - variables:
       notice_source: "{{ sources[0] }}"
-      notice_token: "{{ states[sources[0]].context.id }}"
+      notice_token: >-
+        {% if trigger is defined and trigger.id | default('startup') in ['door','alert'] and
+              trigger.to_state is defined and trigger.to_state is not none %}
+          {{ trigger.to_state.context.id }}
+        {% else %}{{ states[sources[0]].context.id }}{% endif %}
   - action: "{{ show_action }}"
     data:
       expected_device: "{{ snapshot[1] }}"

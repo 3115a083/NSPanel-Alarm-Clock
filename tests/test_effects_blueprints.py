@@ -11,6 +11,18 @@ ROOT = Path(__file__).resolve().parents[1]
 EVENTS = yaml.load((ROOT/'homeassistant/blueprints/nspanel_alarm_events.yaml').read_text(encoding='utf-8'), Loader=Loader)
 
 class EffectBlueprintTests(unittest.TestCase):
+    def test_short_pulse_uses_trigger_snapshot_even_after_source_turns_off(self):
+        source=next(d['value_template'] for d in walk(EVENTS['actions'])
+                    if isinstance(d.get('value_template'),str) and 'trigger.to_state.entity_id' in d['value_template'])
+        values=dict(sources=['binary_sensor.door'],show_action='esphome.fixture_alarm_show_notice',
+                    has_service=lambda *args:True,states=lambda e:'off',
+                    trigger=NS(id='door',to_state=NS(entity_id='binary_sensor.door',state='on',context=NS(id='pulse'))))
+        self.assertTrue(render(source,values))
+        token=next(d['variables']['notice_token'] for d in walk(EVENTS['actions']) if 'notice_token' in d.get('variables',{}))
+        self.assertEqual(render(token,values),'pulse')
+        values['trigger'].to_state.entity_id='binary_sensor.other'
+        self.assertFalse(render(source,values))
+
     def test_relay_conditions_and_or_empty_and_unknown(self):
         templates=[d['variables']['relay_gate'] for d in walk(NEW['actions']) if 'relay_gate' in d.get('variables',{})]
         for i,source in enumerate(templates,1):

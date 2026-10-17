@@ -89,7 +89,8 @@ def render_effects(hass):
         hass.states.async_set('input_boolean.fixture','unavailable')
         assert not Template(source,hass).async_render(values)['valid']
     hass.states.async_set('binary_sensor.door','on')
-    token=hass.states.get('binary_sensor.door').context.id
+    door_state=hass.states.get('binary_sensor.door')
+    token=door_state.context.id
     source=next(d['value_template'] for d in walk(events_blueprint.data['actions'])
                 if isinstance(d.get('value_template'),str) and "wait.trigger.id == 'confirmed'" in d['value_template'])
     data=SimpleNamespace(device_name='fixture',mac='aa0011223344',command='door_action',token=token)
@@ -98,6 +99,11 @@ def render_effects(hass):
     assert Template(source,hass).async_render(values)
     hass.states.async_set('binary_sensor.door','off')
     assert Template(source,hass).async_render(values) # Doorbell pulse has ended; captured activation still valid.
+    start_guard=next(d['value_template'] for d in walk(events_blueprint.data['actions'])
+                     if isinstance(d.get('value_template'),str) and 'trigger.to_state.entity_id' in d['value_template'])
+    start_values=dict(sources=['binary_sensor.door'],show_action='esphome.fixture_alarm_show_notice',
+        has_service=lambda *args:True,trigger=SimpleNamespace(id='door',to_state=door_state))
+    assert Template(start_guard,hass).async_render(start_values)
     data.token='stale'
     assert not Template(source,hass).async_render(values)
     data.token=token; data.mac='bb0011223344'
