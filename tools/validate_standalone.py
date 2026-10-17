@@ -1,5 +1,6 @@
 """Compile the independent EU profile via the real remote consumer path."""
 import base64
+import argparse
 import hashlib
 import os
 from pathlib import Path
@@ -10,6 +11,9 @@ import tempfile
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+parser=argparse.ArgumentParser()
+parser.add_argument('--config-only',action='store_true',help='Validate merged config before expensive builds; default still compiles firmware')
+args=parser.parse_args()
 class Loader(yaml.SafeLoader):
     pass
 Loader.add_multi_constructor('!', lambda loader, tag, node:
@@ -68,6 +72,9 @@ with tempfile.TemporaryDirectory(prefix='standalone-consumer-') as temp:
         source=Path(header)
         assert source.parent != config and source.read_bytes()==(ROOT/'esphome'/source.name).read_bytes()
     assert 'esphome.nspanel_easy' not in str(merged)
+    if args.config_only:
+        print('Standalone remote consumer schema and merged configuration passed; full compilation remains a separate required step.')
+        sys.exit(0)
     subprocess.run([sys.executable,'-m','esphome','compile',str(path)],check=True)
     flags=(config/'.esphome/build/nspanel-alarm-example/src/esphome/core/defines.h').read_text()
     assert '#define USE_OTA_ENCRYPTION_REQUIRED' in flags and '#define USE_OTA_PASSWORD' not in flags

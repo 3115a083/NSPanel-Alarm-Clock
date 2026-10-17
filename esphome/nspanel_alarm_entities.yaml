@@ -272,8 +272,8 @@ select:
 api:
   actions:
     - action: alarm_report_blueprint
-      variables: {expected_device: string, expected_mac: string, version: string}
+      variables: {expected_device: string, expected_mac: string, blueprint_revision: string}
       then:
         - lambda: |-
-            if (wake_alarm::matches_identity(expected_device,expected_mac,App.get_name(),get_mac_address()) && version=="0.3.4")
-              id(wa_blueprint_version)=version;
+            if (wake_alarm::matches_identity(expected_device,expected_mac,App.get_name(),get_mac_address()) && blueprint_revision=="0.3.4")
+              id(wa_blueprint_version)=blueprint_revision;

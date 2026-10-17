@@ -741,7 +741,7 @@ actions:
         data:
           expected_device: "{{ snapshot[1] }}"
           expected_mac: "{{ snapshot[2] }}"
-          version: '0.3.4'
+          blueprint_revision: '0.3.4'
   - variables:
       pages_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_page_settings' }}"
       labels_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_button_labels' }}"
