@@ -21,6 +21,11 @@ std::vector<uint8_t> packet(int x, int y, bool down) {
   return {0x67,uint8_t(x>>8),uint8_t(x),uint8_t(y>>8),uint8_t(y),uint8_t(down),255,255,255};
 }
 int main() {
+  assert(corrected_temperature(25,2)==27);
+  assert(corrected_temperature(25,-2)==23);
+  assert(std::isnan(corrected_temperature(NAN,0)));
+  assert(std::isnan(corrected_temperature(-273,0)));
+  assert(std::isnan(corrected_temperature(25,11)));
   assert(clock_digits(0,5,true)=="12:05");
   assert(clock_digits(12,5,true)=="12:05");
   assert(clock_digits(23,59,true)=="11:59");

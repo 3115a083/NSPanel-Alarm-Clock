@@ -1,11 +1,17 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
 
 namespace wake_alarm {
+inline float corrected_temperature(float raw, float offset) {
+  if (!std::isfinite(raw) || !std::isfinite(offset) || raw < -40 || raw > 125 || offset < -10 || offset > 10)
+    return NAN;
+  return raw+offset;
+}
 inline bool ui_edit_pending(int profile, uint32_t revision, uint32_t acknowledged) {
   return profile == 2 && revision != acknowledged;
 }

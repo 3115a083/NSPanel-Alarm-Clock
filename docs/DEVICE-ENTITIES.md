@@ -81,7 +81,8 @@ ADC samples are filtered; only meaningful changes and a five-minute heartbeat
 are published. Correction applies to raw temperature, so repeated changes do not
 compound the offset. The panel's internal heat can bias room temperature.
 Compare against a reference thermometer after warm-up before choosing an offset.
-Missing/invalid readings stay unknown, not a fabricated room temperature.
+Missing/non-finite readings and raw temperatures outside -40 to 125 C stay
+unknown. This rejects impossible conversion values, not every physical sensor fault.
 
 The actual merged consumer configuration and complete ESPHome firmware are
 validated in CI. Native tests cover intermediate dimming, page timeout, wake-up

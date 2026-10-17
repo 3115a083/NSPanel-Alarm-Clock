@@ -46,7 +46,7 @@ sensor:
     accuracy_decimals: 1
     update_interval: 60s
     lambda: |-
-      return id(wa_ntc_raw).state + id(wa_temperature_correction).state;
+      return wake_alarm::corrected_temperature(id(wa_ntc_raw).state,id(wa_temperature_correction).state);
     filters:
       - delta: 0.05
       - heartbeat: {period: 5min, optimistic: true}
