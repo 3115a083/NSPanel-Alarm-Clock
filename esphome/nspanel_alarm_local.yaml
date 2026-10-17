@@ -22,6 +22,7 @@ esphome:
   includes:
     - nspanel_alarm_schedule_v2.h
     - nspanel_alarm_identity.h
+    - nspanel_alarm_controls.h
 
 preferences:
   # Restored globals poll every second; sync pending writes at the same cadence.
@@ -29,6 +30,12 @@ preferences:
   flash_write_interval: 1s
 
 globals:
+  # A local edit is mirrored to HA helpers before accepting another HA plan.
+  - {id: wa_ui_revision, type: uint32_t, restore_value: yes, initial_value: '0'}
+  - {id: wa_ui_ack, type: uint32_t, restore_value: yes, initial_value: '0'}
+  - {id: wa_ui_edit_hour, type: int, restore_value: yes, initial_value: '0'}
+  - {id: wa_ui_edit_minute, type: int, restore_value: yes, initial_value: '0'}
+  - {id: wa_ui_edit_enabled, type: bool, restore_value: yes, initial_value: 'false'}
   - id: wa_ui_profile
     type: int
     restore_value: no
@@ -87,9 +94,20 @@ globals:
 
 api:
   actions:
+    - action: alarm_ack_ui
+      variables:
+        expected_device: string
+        expected_mac: string
+        revision: int
+      then:
+        - lambda: |-
+            if (wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) &&
+                static_cast<uint32_t>(revision) == id(wa_ui_revision)) id(wa_ui_ack) = id(wa_ui_revision);
     - action: alarm_disable
       then:
-        - lambda: 'id(wa_enabled) = false;'
+        - lambda: |-
+            if (!wake_alarm::ui_edit_pending(id(wa_ui_profile), id(wa_ui_revision), id(wa_ui_ack)))
+              id(wa_enabled) = false;
     - action: alarm_apply_plan
       variables:
         enabled: bool
@@ -166,7 +184,8 @@ api:
         expected_mac: string
       then:
         - lambda: |-
-            if (wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()))
+            if (wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) &&
+                !wake_alarm::ui_edit_pending(id(wa_ui_profile), id(wa_ui_revision), id(wa_ui_ack)))
               id(wa_enabled) = false;
             else ESP_LOGE("wake_alarm", "Rejected disable for another device");
     - action: alarm_configure
@@ -179,6 +198,7 @@ api:
         buzzer_grace_seconds: int
       then:
         - lambda: |-
+            if (wake_alarm::ui_edit_pending(id(wa_ui_profile), id(wa_ui_revision), id(wa_ui_ack))) return;
             // Reject corrupt/malformed configs rather than erasing the last good schedule.
             if (hour < 0 || hour > 23 || minute < 0 || minute > 59 ||
                 weekdays < 0 || weekdays > 127 || snooze_minutes < 1 ||
@@ -225,6 +245,10 @@ script:
       - lambda: |-
           static_assert(NSPANEL_ALARM_SCHEDULE_API_VERSION == 2,
                         "Outdated alarm header: remove local header copies and clean build files");
+          if (wake_alarm::ui_edit_pending(id(wa_ui_profile), id(wa_ui_revision), id(wa_ui_ack))) {
+            ESP_LOGW("wake_alarm", "Local edit pending HA acknowledgement; keeping local plan");
+            return;
+          }
           if (hour < 0 || hour > 23 || minute < 0 || minute > 59 ||
               weekdays < 0 || weekdays > 127 || snooze_minutes < 1 ||
               snooze_minutes > 60 || buzzer_grace_seconds < 0 ||

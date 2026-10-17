@@ -9,7 +9,8 @@ blueprint:
     Disable the old wecker_schedule_sync automation to avoid competing writers.
     Requires firmware with the NSPALARM1 device snapshot and device-bound actions.
     Helpers can be created in the UI or from alarm_clock_helpers.yaml.
-    This blueprint does not create helpers, upload firmware or control relays.
+    Includes local clock/screensaver settings and optional display-only data pages.
+    Thermostat/humidifier controls require explicit opt-in. Only explicitly configured custom button actions can control other targets. It never uploads firmware/TFT and does not create helpers.
   domain: automation
   source_url: https://github.com/3115a083/NSPanel-Alarm-Clock/blob/main/homeassistant/blueprints/nspanel_alarm_device.yaml
   homeassistant:
@@ -131,10 +132,192 @@ blueprint:
           default: false
           selector: {boolean: {}}
 
+    buttons:
+      name: Physical buttons (normal and alarm)
+      description: Short acts on release; long at 0.8 seconds. Right hold for 5 seconds always stops an alarm. Navigation/editor actions wait until alarm acknowledgement.
+      input:
+        normal_left_short:
+          name: Normal - left short
+          default: minus
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        normal_right_short:
+          name: Normal - right short
+          default: plus
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        normal_left_long:
+          name: Normal - left long
+          default: previous
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        normal_right_long:
+          name: Normal - right long
+          default: next
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        alarm_left_short:
+          name: Alarm - left short
+          default: snooze
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        alarm_right_short:
+          name: Alarm - right short
+          default: stop
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        alarm_left_long:
+          name: Alarm - left long
+          default: snooze
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        alarm_right_long:
+          name: Alarm - right long
+          default: stop
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        custom_left_short:
+          name: Custom HA action - left short
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        custom_right_short:
+          name: Custom HA action - right short
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        custom_left_long:
+          name: Custom HA action - left long
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        custom_right_long:
+          name: Custom HA action - right long
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+
+    display:
+      name: Clock, screensaver and optional pages
+      input:
+        clock_format:
+          name: Time format
+          default: '24h'
+          selector: {select: {options: ['24h', '12h']}}
+        night_mode:
+          name: Screensaver
+          description: Dim keeps the clock and next alarm visible. Black turns the backlight off.
+          default: dim
+          selector: {select: {options: [dim, black, disabled]}}
+        schedule_enabled:
+          name: Limit screensaver to a time window (off = all day)
+          default: false
+          selector: {boolean: {}}
+        schedule_start:
+          name: Screensaver window starts
+          default: '22:00:00'
+          selector: {time: {}}
+        schedule_end:
+          name: Screensaver window ends
+          description: Overnight supported. Equal start/end means all day. Inactivity still applies.
+          default: '07:00:00'
+          selector: {time: {}}
+        blackout_enabled:
+          name: Enable a separate backlight-off window
+          default: false
+          selector: {boolean: {}}
+        blackout_start:
+          name: Backlight-off window starts
+          default: '23:00:00'
+          selector: {time: {}}
+        blackout_end:
+          name: Backlight-off window ends
+          default: '06:00:00'
+          selector: {time: {}}
+        blackout_lights:
+          name: Turn backlight off only if this light is off (zero or one)
+          description: Empty means unconditional inside the backlight-off window. Unknown/stale light never enables blackout. Touch wakes temporarily; ringing always wakes.
+          default: []
+          selector: {entity: {filter: {domain: light}, multiple: true}}
+        night_timeout:
+          name: Inactivity before screensaver (seconds, 0 disables)
+          default: 30
+          selector: {number: {min: 0, max: 86400, step: 1, mode: box}}
+        night_brightness:
+          name: Dim clock brightness (%)
+          default: 1
+          selector: {number: {min: 0, max: 100, step: 1, mode: box}}
+        awake_brightness:
+          name: Awake brightness (%)
+          default: 25
+          selector: {number: {min: 1, max: 100, step: 1, mode: box}}
+        prewake_minutes:
+          name: Wake the display this many minutes before the alarm (0 disables)
+          default: 0
+          selector: {number: {min: 0, max: 60, step: 1, mode: box}}
+        weather_entities:
+          name: Weather page (zero or one)
+          default: []
+          selector: {entity: {filter: {domain: weather}, multiple: true}}
+        display_entities:
+          name: Read-only entity page (up to four)
+          default: []
+          selector: {entity: {filter: [{domain: sensor}, {domain: binary_sensor}, {domain: light}, {domain: switch}], multiple: true}}
+        climate_entities:
+          name: Thermostat page (zero or one)
+          default: []
+          selector: {entity: {filter: {domain: climate}, multiple: true}}
+        climate_control:
+          name: Allow explicit thermostat controls on the panel
+          default: false
+          selector: {boolean: {}}
+        humidifier_entities:
+          name: Humidifier page (zero or one)
+          default: []
+          selector: {entity: {filter: {domain: humidifier}, multiple: true}}
+        humidifier_control:
+          name: Allow explicit humidifier controls on the panel
+          default: false
+          selector: {boolean: {}}
+        agenda_calendars:
+          name: Display calendars (independent of alarm calendars)
+          default: []
+          selector: {entity: {filter: {domain: calendar}, multiple: true}}
+        agenda_filter:
+          name: Agenda title contains (optional, case insensitive)
+          default: ''
+          selector: {text: {}}
+        agenda_after_stop:
+          name: Show agenda after Stop (seconds, 0 disables; Snooze does not count)
+          default: 0
+          selector: {number: {min: 0, max: 3600, step: 1, mode: box}}
+
 mode: restart
 max_exceeded: silent
 variables:
+  schedule_enabled: !input schedule_enabled
+  schedule_start: !input schedule_start
+  schedule_end: !input schedule_end
+  blackout_enabled: !input blackout_enabled
+  blackout_start: !input blackout_start
+  blackout_end: !input blackout_end
+  blackout_lights: !input blackout_lights
+  normal_left_short: !input normal_left_short
+  normal_right_short: !input normal_right_short
+  normal_left_long: !input normal_left_long
+  normal_right_long: !input normal_right_long
+  alarm_left_short: !input alarm_left_short
+  alarm_right_short: !input alarm_right_short
+  alarm_left_long: !input alarm_left_long
+  alarm_right_long: !input alarm_right_long
   panel_device: !input panel_device
+  clock_format: !input clock_format
+  night_mode: !input night_mode
+  night_timeout: !input night_timeout
+  night_brightness: !input night_brightness
+  awake_brightness: !input awake_brightness
+  prewake_minutes: !input prewake_minutes
+  weather_entities: !input weather_entities
+  display_entities: !input display_entities
+  climate_entities: !input climate_entities
+  climate_control: !input climate_control
+  humidifier_entities: !input humidifier_entities
+  humidifier_control: !input humidifier_control
+  agenda_calendars: !input agenda_calendars
+  agenda_filter: !input agenda_filter
+  agenda_after_stop: !input agenda_after_stop
   enabled_helper: !input enabled_helper
   time_helper: !input time_helper
   weekdays: !input weekdays
@@ -153,6 +336,13 @@ variables:
   calendar_mode: !input calendar_mode
   calendar_free_days: !input calendar_free_days
 triggers:
+  - trigger: state
+    entity_id: !input blackout_lights
+  - trigger: event
+    id: panel_ui
+    event_type: esphome.nspanel_alarm
+    event_data:
+      device_id: !input panel_device
   - trigger: homeassistant
     event: start
   - trigger: event
@@ -170,6 +360,20 @@ triggers:
     entity_id: !input app_entities
   - trigger: state
     entity_id: !input calendars
+  - trigger: state
+    entity_id: !input weather_entities
+    for: {seconds: 5}
+  - trigger: state
+    entity_id: !input display_entities
+    for: {seconds: 5}
+  - trigger: state
+    entity_id: !input climate_entities
+    for: {seconds: 5}
+  - trigger: state
+    entity_id: !input humidifier_entities
+    for: {seconds: 5}
+  - trigger: state
+    entity_id: !input agenda_calendars
 actions:
   - variables:
       snapshots: >-
@@ -219,6 +423,224 @@ actions:
           {% if day in weekdays %}{% set ns.mask = ns.mask + 2 ** loop.index0 %}{% endif %}
         {% endfor %}
         {{ ns.mask }}
+  - if: >-
+      {{ blackout_lights | length > 1 or weather_entities | length > 1 or display_entities | length > 4 or
+         climate_entities | length > 1 or humidifier_entities | length > 1 }}
+    then:
+      - stop: Select at most one weather/thermostat/humidifier and four display entities.
+        error: true
+  - variables:
+      ui_states: >-
+        {% set ns = namespace(items=[]) %}
+        {% for entity in device_entities(panel_device) %}
+          {% if entity in integration_entities('esphome') and states(entity).startswith('NSPUI1|') %}
+            {% set ns.items = ns.items + [states(entity).split('|')] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.items }}
+  - if: "{{ ui_states | length > 1 }}"
+    then:
+      - stop: Duplicate local UI edit state on this device.
+        error: true
+  - if: "{{ ui_states | length == 1 }}"
+    then:
+      - variables:
+          ui: "{{ ui_states[0] }}"
+      - if: >-
+          {{ ui | length != 7 or ui[1] != snapshot[2] or
+             not (ui[2] | regex_match('^[0-9]+$')) or not (ui[3] | regex_match('^[0-9]+$')) or
+             not (ui[4] | regex_match('^[0-9]+$')) or not (ui[5] | regex_match('^[0-9]+$')) or
+             ui[4] | int > 23 or ui[5] | int > 59 or ui[6] not in ['0','1'] }}
+        then:
+          - stop: Invalid or foreign local edit state. No helper or device write.
+            error: true
+      - if: "{{ ui[2] != ui[3] }}"
+        then:
+          - if: >-
+              {{ state_attr(time_helper, 'has_time') != true or state_attr(time_helper, 'has_date') != false or
+                 states(enabled_helper) not in ['on','off'] }}
+            then:
+              - stop: Local edit needs valid time-only and master helpers before acknowledgement.
+                error: true
+          - if: "{{ state_attr(time_helper,'hour') | int(-1) != ui[4] | int or state_attr(time_helper,'minute') | int(-1) != ui[5] | int }}"
+            then:
+              - action: input_datetime.set_datetime
+                target: {entity_id: !input time_helper}
+                data:
+                  time: "{{ '%02d:%02d:00' | format(ui[4] | int, ui[5] | int) }}"
+          - if: "{{ is_state(enabled_helper, 'on') != (ui[6] == '1') }}"
+            then:
+              - action: "{{ 'input_boolean.turn_on' if ui[6] == '1' else 'input_boolean.turn_off' }}"
+                target: {entity_id: !input enabled_helper}
+          - variables:
+              ack_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_ack_ui' }}"
+          - if: "{{ not has_service('esphome', ack_action.split('.')[1]) }}"
+            then:
+              - stop: UI acknowledgement API missing; local edit remains active.
+                error: true
+          - action: "{{ ack_action }}"
+            data:
+              expected_device: "{{ snapshot[1] }}"
+              expected_mac: "{{ snapshot[2] }}"
+              revision: "{{ ui[2] | int }}"
+  - if: "{{ trigger is defined and trigger.id | default('') == 'panel_ui' }}"
+    then:
+      - condition: template
+        value_template: >-
+          {{ trigger.event.data.device_name | default('') == snapshot[1] and
+             trigger.event.data.mac | default('') == snapshot[2] }}
+      - variables:
+          request: "{{ trigger.event.data.command | default('') }}"
+      - choose:
+          - conditions: "{{ request == 'button_left_short' }}"
+            sequence: !input custom_left_short
+          - conditions: "{{ request == 'button_right_short' }}"
+            sequence: !input custom_right_short
+          - conditions: "{{ request == 'button_left_long' }}"
+            sequence: !input custom_left_long
+          - conditions: "{{ request == 'button_right_long' }}"
+            sequence: !input custom_right_long
+          - conditions: "{{ request in ['climate_up','climate_down','climate_toggle'] and climate_control and climate_entities | length == 1 and states(climate_entities[0]) not in ['unknown','unavailable'] }}"
+            sequence:
+              - variables:
+                  target_entity: "{{ climate_entities[0] }}"
+              - if: "{{ request == 'climate_toggle' }}"
+                then:
+                  - action: "{{ 'climate.turn_on' if is_state(target_entity,'off') else 'climate.turn_off' }}"
+                    target: {entity_id: "{{ target_entity }}"}
+                else:
+                  - condition: template
+                    value_template: "{{ state_attr(target_entity,'temperature') is number and state_attr(target_entity,'min_temp') is number and state_attr(target_entity,'max_temp') is number }}"
+                  - action: climate.set_temperature
+                    target: {entity_id: "{{ target_entity }}"}
+                    data:
+                      temperature: >-
+                        {% set step = state_attr(target_entity,'target_temp_step') | float(0.5) %}
+                        {% set value = state_attr(target_entity,'temperature') + (step if request == 'climate_up' else -step) %}
+                        {{ [[value, state_attr(target_entity,'min_temp')] | max, state_attr(target_entity,'max_temp')] | min }}
+          - conditions: "{{ request in ['humidity_up','humidity_down','humidity_toggle'] and humidifier_control and humidifier_entities | length == 1 and states(humidifier_entities[0]) not in ['unknown','unavailable'] }}"
+            sequence:
+              - variables:
+                  target_entity: "{{ humidifier_entities[0] }}"
+              - if: "{{ request == 'humidity_toggle' }}"
+                then:
+                  - action: "{{ 'humidifier.turn_off' if is_state(target_entity,'on') else 'humidifier.turn_on' }}"
+                    target: {entity_id: "{{ target_entity }}"}
+                else:
+                  - condition: template
+                    value_template: "{{ state_attr(target_entity,'humidity') is number and state_attr(target_entity,'min_humidity') is number and state_attr(target_entity,'max_humidity') is number }}"
+                  - action: humidifier.set_humidity
+                    target: {entity_id: "{{ target_entity }}"}
+                    data:
+                      humidity: >-
+                        {% set value = state_attr(target_entity,'humidity') + (5 if request == 'humidity_up' else -5) %}
+                        {{ [[value, state_attr(target_entity,'min_humidity')] | max, state_attr(target_entity,'max_humidity')] | min | int }}
+      - if: "{{ request != 'schedule_changed' }}"
+        then:
+          - stop: Explicit panel request handled or ignored. Values refresh from authoritative HA state.
+  - variables:
+      night_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_night_schedule' }}"
+  - if: "{{ has_service('esphome', night_action.split('.')[1]) }}"
+    then:
+      - action: "{{ night_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          schedule_enabled: "{{ schedule_enabled }}"
+          blackout_enabled: "{{ blackout_enabled }}"
+          blackout_light: "{{ blackout_lights | length == 1 }}"
+          light_off: "{{ blackout_lights | length == 1 and is_state(blackout_lights[0], 'off') }}"
+          light_valid: "{{ blackout_lights | length == 1 and states(blackout_lights[0]) in ['on','off'] }}"
+          schedule_start: "{{ schedule_start.split(':')[0] | int * 60 + schedule_start.split(':')[1] | int }}"
+          schedule_end: "{{ schedule_end.split(':')[0] | int * 60 + schedule_end.split(':')[1] | int }}"
+          blackout_start: "{{ blackout_start.split(':')[0] | int * 60 + blackout_start.split(':')[1] | int }}"
+          blackout_end: "{{ blackout_end.split(':')[0] | int * 60 + blackout_end.split(':')[1] | int }}"
+  - variables:
+      button_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_button_settings' }}"
+  - if: "{{ has_service('esphome', button_action.split('.')[1]) }}"
+    then:
+      - action: "{{ button_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          normal_left_short: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(normal_left_short) }}"
+          normal_right_short: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(normal_right_short) }}"
+          normal_left_long: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(normal_left_long) }}"
+          normal_right_long: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(normal_right_long) }}"
+          alarm_left_short: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(alarm_left_short) }}"
+          alarm_right_short: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(alarm_right_short) }}"
+          alarm_left_long: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(alarm_left_long) }}"
+          alarm_right_long: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(alarm_right_long) }}"
+  - variables:
+      display_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_display_settings' }}"
+      cards_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_update_cards' }}"
+  - if: "{{ has_service('esphome', display_action.split('.')[1]) }}"
+    then:
+      - action: "{{ display_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          twelve_hour: "{{ clock_format == '12h' }}"
+          night_mode: "{{ 1 if night_mode == 'dim' else 2 if night_mode == 'black' else 0 }}"
+          timeout_seconds: "{{ night_timeout | int }}"
+          night_brightness: "{{ night_brightness | int }}"
+          awake_brightness: "{{ awake_brightness | int }}"
+          prewake_minutes: "{{ prewake_minutes | int }}"
+          agenda_seconds: "{{ agenda_after_stop | int }}"
+  - if: "{{ has_service('esphome', cards_action.split('.')[1]) }}"
+    then:
+      - variables:
+          agenda_reply: {}
+      - if: "{{ agenda_calendars | length > 0 }}"
+        then:
+          - action: calendar.get_events
+            continue_on_error: true
+            target: {entity_id: !input agenda_calendars}
+            data:
+              start_date_time: "{{ now().isoformat() }}"
+              end_date_time: "{{ (today_at('00:00') + timedelta(days=2)).isoformat() }}"
+            response_variable: agenda_reply
+      - variables:
+          agenda_valid: >-
+            {% set ns = namespace(ok=true) %}
+            {% for entity in agenda_calendars %}
+              {% if entity not in agenda_reply or agenda_reply[entity].get('events') is not iterable %}{% set ns.ok=false %}{% endif %}
+            {% endfor %}
+            {{ ns.ok }}
+          agenda_lines: >-
+            {% set ns = namespace(items=[]) %}
+            {% for entity in agenda_calendars %}
+              {% for event in agenda_reply.get(entity,{}).get('events',[]) %}
+                {% set title = event.get('summary','') | string %}
+                {% set raw = event.get('start','') | string %}
+                {% set epoch = as_timestamp(raw,0) %}
+                {% if epoch > 0 and (not agenda_filter or agenda_filter | lower in title | lower) %}
+                  {% set clock = epoch | timestamp_custom('%H:%M' if clock_format == '24h' else '%I:%M %p', true) if ':' in raw else 'All day' %}
+                  {% set ns.items = ns.items + [{'epoch':epoch,'text':clock ~ ' ' ~ title}] %}
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+            {{ (ns.items | sort(attribute='epoch') | map(attribute='text') | list)[:2] }}
+      - action: "{{ cards_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          page_mask: "{{ 3 + (4 if weather_entities else 0) + (8 if display_entities else 0) + (16 if climate_entities else 0) + (32 if humidifier_entities else 0) + (64 if agenda_calendars else 0) }}"
+          weather: "{{ states(weather_entities[0]) if weather_entities else '' }}"
+          weather_detail: "{{ (state_attr(weather_entities[0],'temperature') | string) ~ ' ' ~ (state_attr(weather_entities[0],'temperature_unit') | default('',true) | replace('°','')) ~ '  Humidity ' ~ (state_attr(weather_entities[0],'humidity') | string) ~ '%' if weather_entities else '' }}"
+          entity0: "{{ ((state_attr(display_entities[0],'friendly_name') | default(display_entities[0],true)) ~ ': ' ~ states(display_entities[0]) ~ ' ' ~ (state_attr(display_entities[0],'unit_of_measurement') | default('',true))) if display_entities | length > 0 else '' }}"
+          entity1: "{{ ((state_attr(display_entities[1],'friendly_name') | default(display_entities[1],true)) ~ ': ' ~ states(display_entities[1]) ~ ' ' ~ (state_attr(display_entities[1],'unit_of_measurement') | default('',true))) if display_entities | length > 1 else '' }}"
+          entity2: "{{ ((state_attr(display_entities[2],'friendly_name') | default(display_entities[2],true)) ~ ': ' ~ states(display_entities[2]) ~ ' ' ~ (state_attr(display_entities[2],'unit_of_measurement') | default('',true))) if display_entities | length > 2 else '' }}"
+          entity3: "{{ ((state_attr(display_entities[3],'friendly_name') | default(display_entities[3],true)) ~ ': ' ~ states(display_entities[3]) ~ ' ' ~ (state_attr(display_entities[3],'unit_of_measurement') | default('',true))) if display_entities | length > 3 else '' }}"
+          climate: "{{ states(climate_entities[0]) ~ '  Current ' ~ (state_attr(climate_entities[0],'current_temperature') | string) if climate_entities else '' }}"
+          climate_detail: "{{ 'Target ' ~ (state_attr(climate_entities[0],'temperature') | string) ~ (' | controls enabled' if climate_control else ' | read only') if climate_entities else '' }}"
+          humidity: "{{ states(humidifier_entities[0]) ~ '  Current ' ~ (state_attr(humidifier_entities[0],'current_humidity') | string) ~ '%' if humidifier_entities else '' }}"
+          humidity_detail: "{{ 'Target ' ~ (state_attr(humidifier_entities[0],'humidity') | string) ~ '%' ~ (' | controls enabled' if humidifier_control else ' | read only') if humidifier_entities else '' }}"
+          agenda: "{{ agenda_lines[0] if agenda_lines else 'No matching events' }}"
+          agenda_detail: "{{ agenda_lines[1] if agenda_lines | length > 1 else '' }}"
+          agenda_valid: "{{ agenda_valid }}"
+  - variables:
+      master: "{{ is_state(enabled_helper, 'on') }}"
   - condition: template
     value_template: "{{ panel_name | regex_match('^[a-z][a-z0-9_-]{0,62}$') }}"
   - if: "{{ states(enabled_helper) == 'off' }}"

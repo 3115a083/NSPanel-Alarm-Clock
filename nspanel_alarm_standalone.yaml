@@ -5,3 +5,4 @@ packages:
   hardware: !include esphome/nspanel_alarm_hardware.yaml
   alarm_core: !include esphome/nspanel_alarm_local.yaml
   display: !include esphome/nspanel_alarm_display.yaml
+  interaction: !include esphome/nspanel_alarm_interaction.yaml

@@ -62,9 +62,10 @@ int main() {
   assert(make(false, true, 31, false, false).text[0] == "No time");
   assert(make(false, false, 0, true, true).text[0] == "Ringing");
   assert(make(false, false, 0, false, true).text[0] == "Snoozed");
-  assert(make(true, true, 0, false, false).text[0] == "Disarmed");
+  assert(make(true, true, 0, false, false).text[0] == "Off");
   assert(make(true, true, 0, false, false).text[6] == "No days selected");
-  assert(make(true, false, 127, false, false).text[5] == "Disabled");
+  assert(make(true, false, 127, false, false).text[5] == "Off");
+  assert(make(true, false, 127, false, false).text[4] == "--:--");
   ClockRenderer renderer;
   assert(&clock_renderer() == &clock_renderer());
   int writes = 0;

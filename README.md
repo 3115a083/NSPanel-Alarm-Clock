@@ -6,6 +6,11 @@ Home Assistant alarm-clock prototype for original Sonoff NSPanel EU/US (not Pro)
 
 ## What is implemented
 
+- Standalone [night display and controls](docs/CONTROLS-AND-NIGHT.md): dim/black
+  screensaver, local regular-alarm editor, gestures, long-button navigation,
+  Snooze countdown, 12/24-hour display and optional selected data/appliance pages.
+  New interactions and controls require separate hardware acceptance.
+
 - Experimental [independent EU clock profile](docs/STANDALONE.md) with its own
   local display/boot path and a device-selecting Blueprint. It is an explicit
   alternative to the full Easy setup, not an automatic migration or TFT release.

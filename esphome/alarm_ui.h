@@ -15,7 +15,7 @@ inline ClockView clock_view(bool valid, int hour, int minute, int year, int mont
   ClockView view;
   char buf[40];
   view.text[0] = ringing ? "Ringing" : pending ? "Snoozed" :
-                 !valid ? "No time" : enabled && mask ? "Armed" : "Disarmed";
+                 !valid ? "No time" : enabled && mask ? "Armed" : "Off";
   if (valid) {
     snprintf(buf, sizeof(buf), "%02d:%02d", hour, minute);
     view.text[1] = buf;
@@ -27,8 +27,8 @@ inline ClockView clock_view(bool valid, int hour, int minute, int year, int mont
   }
   view.text[3] = "ALARM TIME";
   snprintf(buf, sizeof(buf), "%02d:%02d", alarm_hour, alarm_minute);
-  view.text[4] = buf;
-  view.text[5] = enabled ? "Enabled" : "Disabled";
+  view.text[4] = enabled ? buf : "--:--";
+  view.text[5] = enabled ? "On" : "Off";
   static const char *const days[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
   for (int i = 0; i < 7; ++i) {
     if (mask & (1 << i)) {

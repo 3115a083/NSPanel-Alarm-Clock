@@ -37,6 +37,12 @@ def schema_fixtures():
                 app_enabled_helper='input_boolean.fixture_app_enabled',
                 app_time_helper='input_datetime.fixture_app_time',
                 calendar_enabled_helper='input_boolean.fixture_calendar_enabled')
+            if extra is fixtures[-1]:
+                panel.update(clock_format='12h',night_mode='black',weather_entities=['weather.fixture'],
+                    display_entities=['sensor.fixture','light.fixture'],climate_entities=['climate.fixture'],
+                    humidifier_entities=['humidifier.fixture'],agenda_calendars=['calendar.agenda'],
+                    climate_control=True,humidifier_control=True,agenda_after_stop=120,
+                    schedule_enabled=True,blackout_enabled=True,blackout_lights=["light.fixture"],alarm_left_short="custom",custom_left_short=[{"action":"light.toggle","target":{"entity_id":"light.fixture"}}])
         inputs = BlueprintInputs(current, {'alias': 'Compile-only fixture', 'use_blueprint': {
             'path': 'fixture.yaml', 'input': {
                 **panel, **extra}}})
@@ -68,6 +74,41 @@ def render_discovery(hass):
         assert rejected==wrong, (selected,wrong,rejected)
     print('Actual HA device discovery/identity templates passed for two renamed devices and mismatched registry MACs.')
 
+def render_optional_pages(hass):
+    def walk(value):
+        if isinstance(value,dict):
+            yield value
+            for child in value.values(): yield from walk(child)
+        elif isinstance(value,list):
+            for child in value: yield from walk(child)
+    actions=list(walk(device_blueprint.data['actions']))
+    data=next(d['data'] for d in actions if d.get('action')=='{{ cards_action }}')
+    values=dict(snapshot=['NSPALARM1','fixture','aa0011223344','0','0'],
+        weather_entities=[],display_entities=[],climate_entities=[],humidifier_entities=[],
+        climate_control=False,humidifier_control=False,agenda_calendars=[],agenda_lines=[],agenda_valid=True)
+    for value in data.values():
+        Template(value,hass).async_render(values)
+    night=next(d['data'] for d in actions if d.get('action')=='{{ night_action }}')
+    values.update(schedule_enabled=True,blackout_enabled=True,blackout_lights=['light.fixture'],
+        schedule_start='22:00:00',schedule_end='07:00:00',blackout_start='23:00:00',blackout_end='06:00:00',
+        is_state=lambda e,s:s=='off',states=lambda e:'off')
+    rendered={k:Template(v,hass).async_render(values) for k,v in night.items()}
+    assert rendered['schedule_start']==1320 and rendered['blackout_end']==360
+    assert rendered['light_off'] and rendered['light_valid']
+    values.update(blackout_lights=[])
+    assert not Template(night['light_off'],hass).async_render(values)
+    values.update(blackout_lights=['light.fixture'],states=lambda e:'unavailable',is_state=lambda e,s:False)
+    assert not Template(night['light_valid'],hass).async_render(values)
+    source=next(d['variables']['agenda_lines'] for d in actions if 'agenda_lines' in d.get('variables',{}))
+    values.update(agenda_calendars=['calendar.fixture'],clock_format='12h',agenda_filter='work',
+        agenda_reply={'calendar.fixture': {'events':[
+            {'start':'2026-10-19T10:00:00+02:00','summary':'Other'},
+            {'start':'2026-10-19T08:00:00+02:00','summary':'Work early'},
+            {'start':'2026-10-19T09:00:00+02:00','summary':'Work late'}]}})
+    result=Template(source,hass).async_render(values)
+    assert result==['08:00 AM Work early','09:00 AM Work late'], result
+    print('Actual HA optional-page templates passed for empty selectors and independent filtered AM/PM agenda.')
+
 async def render_plan():
     zone = ZoneInfo('Europe/Berlin')
     dt_util.set_default_time_zone(zone)
@@ -77,6 +118,7 @@ async def render_plan():
         # not just an asyncio loop. No live integration or device is started.
         schema_fixtures()
         render_discovery(hass)
+        render_optional_pages(hass)
         source = next(a['variables']['day_plans'] for a in blueprint.data['actions']
                       if 'day_plans' in a.get('variables', {}))
         current = datetime(2026,10,18,18,tzinfo=zone)
