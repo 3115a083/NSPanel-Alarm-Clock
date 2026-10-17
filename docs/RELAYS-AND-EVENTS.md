@@ -30,6 +30,9 @@ Changing a rule releases a currently owned output. Identical periodic settings
 updates preserve its running deadline. Stop cancels a delayed start; it never
 switches a not-yet-started light on later. Repeated ringing/Stop does not extend
 an existing pulse or tail. Reboot restores configuration, not output ownership.
+TFT transfer is refused while an automatic output is active or waiting. Starting
+firmware OTA releases automatic output ownership and turns those outputs off
+before transfer, so a blocking update cannot extend a pulse or tail.
 
 Choose whether Snooze releases the output and whether a resumed alarm triggers
 it again. Up to four explicit on/off conditions can be combined with **all**

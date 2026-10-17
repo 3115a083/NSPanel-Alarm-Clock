@@ -45,6 +45,9 @@ with tempfile.TemporaryDirectory(prefix='standalone-consumer-') as temp:
     ota=[x for x in merged['ota'] if x['platform']=='esphome']
     assert len(ota)==1 and 'encryption' in ota[0] and 'password' not in ota[0]
     assert all(x['restore_mode']=='ALWAYS_OFF' for x in merged['switch'] if str(x['id']) in ['relay_1','relay_2'])
+    assert 'release_all' in str(ota[0]['on_begin'])
+    upload=next(x for x in merged['button'] if x.get('name')=='Alarm Clock Upload TFT')
+    assert 'has_automatic_output' in str(upload['on_press'])
     for header in merged['esphome']['includes']:
         source=Path(header)
         assert source.parent != config and source.read_bytes()==(ROOT/'esphome'/source.name).read_bytes()

@@ -137,6 +137,11 @@ interval:
   - interval: 100ms
     then:
       - lambda: |-
+          if (wake_alarm::display_state().busy) {
+            wake_alarm::effects().previous_ringing=id(wa_ringing);
+            wake_alarm::effects().previous_pending=id(wa_unacknowledged);
+            return;
+          }
           wake_alarm::effects().tick(millis(),id(wa_ringing),id(wa_unacknowledged),[](int index,bool on){
             auto *output = index == 0 ? id(relay_1) : id(relay_2);
             if (on) output->turn_on(); else output->turn_off();

@@ -27,7 +27,12 @@ ota:
     platform: esphome
     encryption: {}
     on_begin:
-      - lambda: 'wake_alarm::display_state().busy = true;'
+      - lambda: |-
+          wake_alarm::effects().release_all([](int index,bool on){
+            auto *output = index == 0 ? id(relay_1) : id(relay_2);
+            if (on) output->turn_on(); else output->turn_off();
+          });
+          wake_alarm::display_state().busy = true;
     on_error:
       - lambda: 'wake_alarm::display_state().busy = false;'
 safe_mode:

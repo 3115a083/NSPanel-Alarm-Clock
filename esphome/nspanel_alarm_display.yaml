@@ -54,8 +54,8 @@ button:
     entity_category: config
     on_press:
       - lambda: |-
-          if (id(wa_unacknowledged) || wake_alarm::display_state().busy) {
-            ESP_LOGW("wake_alarm.ui", "TFT upload refused during pending alarm or update");
+          if (id(wa_unacknowledged) || wake_alarm::display_state().busy || wake_alarm::effects().has_automatic_output()) {
+            ESP_LOGW("wake_alarm.ui", "TFT upload refused during pending alarm, automatic relay or update");
             return;
           }
           wake_alarm::display_state().busy = true;

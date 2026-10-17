@@ -66,6 +66,12 @@ int main() {
   effects.tick(5000,true,true,physical,actual); assert(actual[0]);
   effects.relays[0].manual(); actual[0]=true;
   effects.tick(9000,true,true,physical,actual); assert(actual[0] && !effects.writing);
+  effects.configure(1,rule,physical);
+  effects.tick(10000,false,false,physical,actual);
+  effects.tick(11000,true,true,physical,actual);
+  assert(actual[1] && effects.has_automatic_output());
+  effects.release_all(physical);
+  assert(!actual[1] && actual[0] && !effects.has_automatic_output()); // OTA releases only automatic owners.
   Notice n;
   assert(!n.show(1,"bad\"token","Door","text",30,1,25,5,0));
   assert(!n.show(1,"one","Door","text",301,1,25,5,0));

@@ -109,7 +109,14 @@ struct AlarmEffects {
   std::array<AlarmRelay,2> relays;
   Notice notice;
   bool writing{false}, previous_ringing{false}, previous_pending{false};
+  bool has_automatic_output() const {
+    for (const auto &relay:relays) if (relay.waiting || relay.owned) return true;
+    return false;
+  }
   template<class W> void output(int index,bool on,W write) { writing=true; write(index,on); writing=false; }
+  template<class W> void release_all(W write) {
+    for (int i=0;i<2;++i) relays[i].release([&](bool on){output(i,on,write);});
+  }
   template<class W> void configure(int index,const RelayRule &rule,W write) {
     if (index<0 || index>1) return;
     relays[index].configure(rule,[&](bool on){output(index,on,write);});
