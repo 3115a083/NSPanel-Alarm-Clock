@@ -98,6 +98,9 @@ api:
             if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) ||
                 schedule_start < 0 || schedule_start > 1439 || schedule_end < 0 || schedule_end > 1439 ||
                 blackout_start < 0 || blackout_start > 1439 || blackout_end < 0 || blackout_end > 1439) return;
+            auto &ui = wake_alarm::panel_controls();
+            ui.light_off = light_off; ui.light_valid = light_valid; ui.light_ms = millis();
+            if (!id(wa_display_from_blueprint)) return;
             id(wa_schedule_enabled) = schedule_enabled;
             id(wa_schedule_start) = schedule_start;
             id(wa_schedule_end) = schedule_end;
@@ -105,10 +108,7 @@ api:
             id(wa_blackout_start) = blackout_start;
             id(wa_blackout_end) = blackout_end;
             id(wa_blackout_light) = blackout_light;
-            auto &ui = wake_alarm::panel_controls();
-            ui.light_off = light_off;
-            ui.light_valid = light_valid;
-            ui.light_ms = millis();
+
     - action: alarm_button_settings
       variables:
         expected_device: string
@@ -151,6 +151,7 @@ api:
                 night_mode < 0 || night_mode > 2 || timeout_seconds < 0 || timeout_seconds > 86400 ||
                 night_brightness < 0 || night_brightness > 100 || awake_brightness < 1 || awake_brightness > 100 ||
                 prewake_minutes < 0 || prewake_minutes > 60 || agenda_seconds < 0 || agenda_seconds > 3600) return;
+            if (!id(wa_display_from_blueprint)) return;
             id(wa_twelve_hour) = twelve_hour;
             id(wa_night_mode) = night_mode;
             id(wa_night_timeout) = timeout_seconds;
@@ -158,9 +159,11 @@ api:
             id(wa_prewake_minutes) = prewake_minutes;
             id(wa_agenda_seconds) = agenda_seconds;
             if (id(wa_idle_brightness).state != awake_brightness) {
+              id(wa_applying_display_settings)=true;
               auto call = id(wa_idle_brightness).make_call();
               call.set_value(awake_brightness);
               call.perform();
+              id(wa_applying_display_settings)=false;
             }
     - action: alarm_update_cards
       variables:

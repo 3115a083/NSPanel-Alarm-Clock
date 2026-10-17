@@ -64,6 +64,8 @@ jobs:
           persist-credentials: false
       - name: Install reviewed ESPHome tool
         run: python3 -m pip install --disable-pip-version-check --user esphome==2026.9.1
+      - name: Validate standalone schema before full builds
+        run: python3 tools/validate_standalone.py --config-only
       - name: Validate and compile with generated dummy credentials
         run: python3 tools/validate_firmware.py
       - name: Validate and compile independent EU profile

@@ -98,13 +98,17 @@ interval:
                 {id(wa_plan_date1), id(wa_plan_epoch1), id(wa_plan_source1)}}}) : wake_alarm::DayPlan{};
           const bool prewake = valid && id(wa_enabled) && next.epoch > now.timestamp && ui.prewake_minutes > 0 &&
               next.epoch - now.timestamp <= ui.prewake_minutes * 60;
+          ui.dim_timeout_s=id(wa_dim_timeout);
+          ui.page_timeout_s=id(wa_page_timeout);
+          ui.wakeup_page=id(wa_wakeup_page);
           ui.tick(millis(), id(wa_ringing), prewake);
           auto &overlay = wake_alarm::effects().notice;
           overlay.tick(millis());
           const bool showing_notice = overlay.kind && !id(wa_unacknowledged);
           if (showing_notice) ui.wake(millis());
+          if (ui.manual_black && !id(wa_ringing) && !prewake && !showing_notice) ui.dark=true;
           const int brightness = id(wa_ringing) ? 100 : showing_notice ? overlay.brightness : ui.dark ?
-              (ui.night_mode == 2 ? 0 : ui.night_brightness) : (int)id(wa_idle_brightness).state;
+              (ui.manual_black || ui.night_mode == 2 ? 0 : ui.night_brightness) : ui.dimmed ? id(wa_dim_brightness) : (int)id(wa_idle_brightness).state;
           if (brightness != state.brightness) {
             id(disp1).set_backlight_brightness(brightness / 100.0f);
             state.brightness = brightness;

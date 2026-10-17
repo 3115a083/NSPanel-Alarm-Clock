@@ -21,6 +21,11 @@ std::vector<uint8_t> packet(int x, int y, bool down) {
   return {0x67,uint8_t(x>>8),uint8_t(x),uint8_t(y>>8),uint8_t(y),uint8_t(down),255,255,255};
 }
 int main() {
+  assert(corrected_temperature(25,2)==27);
+  assert(corrected_temperature(25,-2)==23);
+  assert(std::isnan(corrected_temperature(NAN,0)));
+  assert(std::isnan(corrected_temperature(-273,0)));
+  assert(std::isnan(corrected_temperature(25,11)));
   assert(clock_digits(0,5,true)=="12:05");
   assert(clock_digits(12,5,true)=="12:05");
   assert(clock_digits(23,59,true)=="11:59");
@@ -59,6 +64,18 @@ int main() {
   nav.touch(packet(20,280,true),804);
   nav.tick(805,true,false); // Ringing render must not eat a paired touch release.
   assert(std::string(nav.touch(packet(20,280,false),806))=="prev");
+  PanelControls idle;
+  idle.night_mode=0; idle.dim_timeout_s=10; idle.page_timeout_s=20;
+  idle.set_pages(127); idle.set_page(4,6,30,false);
+  idle.tick(9999,false,false); assert(!idle.dimmed);
+  idle.tick(10000,false,false); assert(idle.dimmed && idle.page==PanelPage::CLIMATE);
+  idle.tick(20000,false,false); assert(idle.page==PanelPage::CLOCK);
+  idle.tick(20001,true,false); assert(!idle.dimmed);
+  idle.wakeup_page=2; idle.dark=true; idle.manual_black=true;
+  idle.wake(20002); assert(idle.page==PanelPage::WEATHER && !idle.manual_black && !idle.dark);
+  idle.set_pages(3); idle.dark=true; idle.wake(20003); assert(idle.page==PanelPage::CLOCK);
+  idle.night_mode=1; idle.timeout_s=5; idle.wake(0); idle.tick(5000,false,false);
+  assert(idle.dark && !idle.dimmed); // Night brightness takes priority over intermediate dimming.
   NightSchedule night;
   assert(night.mode(1,720,true,false,false)==1); // All day by default.
   night.enabled=true;

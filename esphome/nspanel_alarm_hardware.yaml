@@ -1,3 +1,5 @@
+substitutions:
+  alarm_project_version: 0.3.4-dev
 # Original Sonoff NSPanel EU pin mapping, consistent with the reviewed Easy base.
 # Independent ESPHome hardware setup: no Easy external component, events or boot.
 esphome:
@@ -10,7 +12,7 @@ esphome:
       - lambda: 'id(wa_ui_profile) = 2;'
   project:
     name: nspanel_alarm.clock
-    version: 0.3.3-dev
+    version: ${alarm_project_version}
 esp32:
   board: esp32dev
   framework:

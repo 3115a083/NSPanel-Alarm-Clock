@@ -6,6 +6,10 @@ Home Assistant alarm-clock prototype for original Sonoff NSPanel EU/US (not Pro)
 
 ## What is implemented
 
+- Standalone [device entities](docs/DEVICE-ENTITIES.md): physical NTC temperature,
+  correction, dim/sleep brightness and timers, notification sound, wake-up page,
+  firmware/Blueprint diagnostics and explicit ownership of display settings.
+
 - [Blueprint and UI review](docs/BLUEPRINT-AND-UI-REVIEW.md): grouped settings,
   direct page menu, separate hour/minute controls, bounded tone preview and
   optional physical-button labels that follow normal/alarm mappings.

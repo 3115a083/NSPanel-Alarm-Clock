@@ -1,11 +1,17 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
 
 namespace wake_alarm {
+inline float corrected_temperature(float raw, float offset) {
+  if (!std::isfinite(raw) || !std::isfinite(offset) || raw < -40 || raw > 125 || offset < -10 || offset > 10)
+    return NAN;
+  return raw+offset;
+}
 inline bool ui_edit_pending(int profile, uint32_t revision, uint32_t acknowledged) {
   return profile == 2 && revision != acknowledged;
 }
@@ -54,6 +60,9 @@ struct NightSchedule {
 struct PanelControls {
   PanelPage page{PanelPage::CLOCK};
   bool menu_open{false};
+  bool dimmed{false}, manual_black{false};
+  uint32_t dim_timeout_s{0}, page_timeout_s{0};
+  int wakeup_page{0};
   bool show_button_labels{true};
   std::array<std::string,4> custom_labels{{"Custom","Custom","Custom","Custom"}};
   uint32_t repeat_ms{0};
@@ -86,7 +95,12 @@ struct PanelControls {
   bool agenda_error{false};
   std::string notice;
   uint32_t notice_ms{0};
-  void wake(uint32_t now) { activity_ms = now; dark = false; }
+  void wake(uint32_t now) {
+    if (dark && wakeup_page>=0 && wakeup_page<=6 && wakeup_page!=1 && (pages&(1<<wakeup_page))) {
+      page=PanelPage(wakeup_page); editing=false; menu_open=false;
+    }
+    activity_ms=now; dark=false; dimmed=false; manual_black=false;
+  }
   void tick(uint32_t now, bool ringing, bool prewake) {
     if (prewake && dark) { page = PanelPage::CLOCK; editing = false; }
     if (ringing) { menu_open=false; wake(now); page = PanelPage::CLOCK; editing = false; auto_agenda = false; }
@@ -95,6 +109,11 @@ struct PanelControls {
     }
     dark = !ringing && !prewake && !auto_agenda && night_mode != 0 && timeout_s != 0 &&
            uint32_t(now - activity_ms) >= timeout_s * 1000;
+    const uint32_t idle=uint32_t(now-activity_ms);
+    dimmed=!ringing && !prewake && !auto_agenda && !dark && dim_timeout_s>0 && idle>=dim_timeout_s*1000;
+    if (!ringing && !auto_agenda && page_timeout_s>0 && idle>=page_timeout_s*1000) {
+      page=PanelPage::CLOCK; menu_open=false; editing=false;
+    }
     if (!notice.empty() && uint32_t(now - notice_ms) >= 4000) notice.clear();
   }
   void begin_edit(int hour, int minute, bool enabled) {
@@ -111,7 +130,7 @@ struct PanelControls {
   }
   void stopped(uint32_t now) {
     if (alarm_seen && agenda_after_stop_s > 0 && (pages & (1 << int(PanelPage::AGENDA)))) {
-      page = PanelPage::AGENDA; auto_agenda = true; agenda_started = now; wake(now);
+      wake(now); page = PanelPage::AGENDA; auto_agenda = true; agenda_started = now;
     }
     alarm_seen = false;
   }
