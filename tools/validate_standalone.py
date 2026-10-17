@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='standalone-consumer-') as temp:
     assert sensors['Temperature']['device_class']=='temperature'
     assert sensors['Temperature']['unit_of_measurement']=='°C'
     assert sensors['Temperature']['accuracy_decimals']==1
-    adc=next(n for n in merged['sensor'] if str(n['id'])=='wa_ntc_voltage')
+    adc=next(n for n in merged['sensor'] if str(n.get('id'))=='wa_ntc_voltage')
     assert adc['pin']['number']==38 and adc['samples']==16
     for entity in [adc,sensors['Temperature']]:
         heartbeat=next(f['heartbeat'] for f in entity['filters'] if 'heartbeat' in f)
@@ -64,7 +64,9 @@ with tempfile.TemporaryDirectory(prefix='standalone-consumer-') as temp:
     assert merged['api']['encryption']['key']
     ota=[x for x in merged['ota'] if x['platform']=='esphome']
     assert len(ota)==1 and 'encryption' in ota[0] and 'password' not in ota[0]
-    assert all(x['restore_mode']=='ALWAYS_OFF' for x in merged['switch'] if str(x['id']) in ['relay_1','relay_2'])
+    relays={str(x.get('id')):x for x in merged['switch'] if str(x.get('id')) in ['relay_1','relay_2']}
+    assert set(relays)=={'relay_1','relay_2'}, 'Both physical relays must exist'
+    assert all(x['platform']=='gpio' and x['restore_mode']=='ALWAYS_OFF' for x in relays.values())
     assert 'release_all' in str(ota[0]['on_begin'])
     upload=next(x for x in merged['button'] if x.get('name')=='Alarm Clock Upload TFT')
     assert 'has_automatic_output' in str(upload['on_press'])
