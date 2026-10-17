@@ -20,7 +20,7 @@ sensor:
       - median: {window_size: 5, send_every: 1, send_first_at: 1}
       - exponential_moving_average: {alpha: 0.2, send_every: 1, send_first_at: 1}
       - delta: 0.002
-      - heartbeat: 5min
+      - heartbeat: {period: 5min, optimistic: true}
   - platform: resistance
     id: wa_ntc_resistance
     sensor: wa_ntc_voltage
@@ -49,7 +49,7 @@ sensor:
       return id(wa_ntc_raw).state + id(wa_temperature_correction).state;
     filters:
       - delta: 0.05
-      - heartbeat: 5min
+      - heartbeat: {period: 5min, optimistic: true}
   - platform: wifi_signal
     name: WiFi Signal
     entity_category: diagnostic
@@ -178,7 +178,9 @@ switch:
   - platform: template
     name: Display Backlight
     lambda: |-
-      return !wake_alarm::panel_controls().manual_black;
+      const int target=wake_alarm::display_state().brightness;
+      if (target<0) return {};
+      return target>0;
     turn_on_action:
       - lambda: wake_alarm::panel_controls().wake(millis());
     turn_off_action:

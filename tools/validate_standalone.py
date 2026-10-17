@@ -47,6 +47,9 @@ with tempfile.TemporaryDirectory(prefix='standalone-consumer-') as temp:
     assert sensors['Temperature']['accuracy_decimals']==1
     adc=next(n for n in merged['sensor'] if str(n['id'])=='wa_ntc_voltage')
     assert adc['pin']['number']==38 and adc['samples']==16
+    for entity in [adc,sensors['Temperature']]:
+        heartbeat=next(f['heartbeat'] for f in entity['filters'] if 'heartbeat' in f)
+        assert heartbeat['optimistic'] is True, 'Temperature must publish changes immediately, not wait five minutes'
     switches={n.get('name'):n for n in merged['switch']}
     assert 'Display Settings from Blueprint' in switches and 'Sound - Notification' in switches
     assert 'wa_notification_sound' in str(merged['api']['actions'])
