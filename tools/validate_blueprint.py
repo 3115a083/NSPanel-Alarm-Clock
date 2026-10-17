@@ -42,7 +42,7 @@ def schema_fixtures():
                     display_entities=['sensor.fixture','light.fixture'],climate_entities=['climate.fixture'],
                     humidifier_entities=['humidifier.fixture'],agenda_calendars=['calendar.agenda'],
                     climate_control=True,humidifier_control=True,agenda_after_stop=120,
-                    alarm_left_short="custom",custom_left_short=[{"action":"light.toggle","target":{"entity_id":"light.fixture"}}])
+                    schedule_enabled=True,blackout_enabled=True,blackout_lights=["light.fixture"],alarm_left_short="custom",custom_left_short=[{"action":"light.toggle","target":{"entity_id":"light.fixture"}}])
         inputs = BlueprintInputs(current, {'alias': 'Compile-only fixture', 'use_blueprint': {
             'path': 'fixture.yaml', 'input': {
                 **panel, **extra}}})
@@ -88,6 +88,17 @@ def render_optional_pages(hass):
         climate_control=False,humidifier_control=False,agenda_calendars=[],agenda_lines=[],agenda_valid=True)
     for value in data.values():
         Template(value,hass).async_render(values)
+    night=next(d['data'] for d in actions if d.get('action')=='{{ night_action }}')
+    values.update(schedule_enabled=True,blackout_enabled=True,blackout_lights=['light.fixture'],
+        schedule_start='22:00:00',schedule_end='07:00:00',blackout_start='23:00:00',blackout_end='06:00:00',
+        is_state=lambda e,s:s=='off',states=lambda e:'off')
+    rendered={k:Template(v,hass).async_render(values) for k,v in night.items()}
+    assert rendered['schedule_start']==1320 and rendered['blackout_end']==360
+    assert rendered['light_off'] and rendered['light_valid']
+    values.update(blackout_lights=[])
+    assert not Template(night['light_off'],hass).async_render(values)
+    values.update(blackout_lights=['light.fixture'],states=lambda e:'unavailable',is_state=lambda e,s:False)
+    assert not Template(night['light_valid'],hass).async_render(values)
     source=next(d['variables']['agenda_lines'] for d in actions if 'agenda_lines' in d.get('variables',{}))
     values.update(agenda_calendars=['calendar.fixture'],clock_format='12h',agenda_filter='work',
         agenda_reply={'calendar.fixture': {'events':[

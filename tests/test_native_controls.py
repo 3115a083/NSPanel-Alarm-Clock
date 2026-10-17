@@ -32,6 +32,24 @@ int main() {
   assert(!ui_edit_pending(0,2,1));
   assert(!ui_edit_pending(2,2,2));
   assert(ui_edit_pending(2,2,1));
+  NightSchedule night;
+  assert(night.mode(1,720,true,false,false)==1); // All day by default.
+  night.enabled=true;
+  assert(night.mode(1,1320,true,false,false)==1);
+  assert(night.mode(1,419,true,false,false)==1);
+  assert(night.mode(1,420,true,false,false)==0);
+  assert(night.mode(1,720,true,false,false)==0);
+  assert(night.mode(1,0,false,false,false)==0); // Invalid clock cannot apply schedule.
+  night.blackout=true; night.requires_light=true;
+  assert(night.mode(1,1380,true,true,true)==2); // Window AND selected light off.
+  assert(night.mode(1,1380,true,false,true)==1);
+  assert(night.mode(1,1380,true,true,false)==1); // Unknown/stale never triggers blackout.
+  assert(night.mode(1,360,true,true,true)==1); // Exclusive end.
+  night.requires_light=false;
+  assert(night.mode(1,1380,true,false,false)==2);
+  assert(in_clock_window(100,200,200)); // Equal endpoints mean 24 hours.
+  assert(in_clock_window(500,400,600));
+  assert(!in_clock_window(600,400,600));
   PanelControls ui;
   ui.tick(29999,false,false); assert(!ui.dark);
   ui.tick(30000,false,false); assert(ui.dark);

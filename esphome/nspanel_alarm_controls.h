@@ -30,9 +30,26 @@ inline std::string remaining_seconds(uint32_t deadline, uint32_t now) {
   snprintf(text, sizeof(text), "%02lu:%02lu", (unsigned long)(left / 60), (unsigned long)(left % 60));
   return text;
 }
+// Civil wall-clock ranges, including overnight and equal-endpoint all-day ranges.
+inline bool in_clock_window(int minute, int start, int end) {
+  return start == end || (start < end ? minute >= start && minute < end : minute >= start || minute < end);
+}
+struct NightSchedule {
+  bool enabled{false}, blackout{false}, requires_light{false};
+  int start{1320}, end{420}, black_start{1380}, black_end{360};
+  int mode(int base, int minute, bool clock_valid, bool light_off, bool light_valid) const {
+    if (blackout && clock_valid && in_clock_window(minute, black_start, black_end) &&
+        (!requires_light || (light_valid && light_off))) return 2;
+    if (enabled && (!clock_valid || !in_clock_window(minute, start, end))) return 0;
+    return base;
+  }
+};
 struct PanelControls {
   PanelPage page{PanelPage::CLOCK};
   uint8_t pages{3};  // Clock + regular alarm editor, other pages explicitly enabled.
+  NightSchedule night_schedule;
+  bool light_off{false}, light_valid{false};
+  uint32_t light_ms{0};
   bool dark{false};
   bool twelve{false};
   int night_mode{1};  // 0 disabled, 1 dim clock, 2 black.

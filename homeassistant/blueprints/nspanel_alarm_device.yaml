@@ -201,6 +201,36 @@ blueprint:
           description: Dim keeps the clock and next alarm visible. Black turns the backlight off.
           default: dim
           selector: {select: {options: [dim, black, disabled]}}
+        schedule_enabled:
+          name: Limit screensaver to a time window (off = all day)
+          default: false
+          selector: {boolean: {}}
+        schedule_start:
+          name: Screensaver window starts
+          default: '22:00:00'
+          selector: {time: {}}
+        schedule_end:
+          name: Screensaver window ends
+          description: Overnight supported. Equal start/end means all day. Inactivity still applies.
+          default: '07:00:00'
+          selector: {time: {}}
+        blackout_enabled:
+          name: Enable a separate backlight-off window
+          default: false
+          selector: {boolean: {}}
+        blackout_start:
+          name: Backlight-off window starts
+          default: '23:00:00'
+          selector: {time: {}}
+        blackout_end:
+          name: Backlight-off window ends
+          default: '06:00:00'
+          selector: {time: {}}
+        blackout_lights:
+          name: Turn backlight off only if this light is off (zero or one)
+          description: Empty means unconditional inside the backlight-off window. Unknown/stale light never enables blackout. Touch wakes temporarily; ringing always wakes.
+          default: []
+          selector: {entity: {filter: {domain: light}, multiple: true}}
         night_timeout:
           name: Inactivity before screensaver (seconds, 0 disables)
           default: 30
@@ -208,7 +238,7 @@ blueprint:
         night_brightness:
           name: Dim clock brightness (%)
           default: 1
-          selector: {number: {min: 0, max: 10, step: 1, mode: box}}
+          selector: {number: {min: 0, max: 100, step: 1, mode: box}}
         awake_brightness:
           name: Awake brightness (%)
           default: 25
@@ -257,6 +287,13 @@ blueprint:
 mode: restart
 max_exceeded: silent
 variables:
+  schedule_enabled: !input schedule_enabled
+  schedule_start: !input schedule_start
+  schedule_end: !input schedule_end
+  blackout_enabled: !input blackout_enabled
+  blackout_start: !input blackout_start
+  blackout_end: !input blackout_end
+  blackout_lights: !input blackout_lights
   normal_left_short: !input normal_left_short
   normal_right_short: !input normal_right_short
   normal_left_long: !input normal_left_long
@@ -299,6 +336,8 @@ variables:
   calendar_mode: !input calendar_mode
   calendar_free_days: !input calendar_free_days
 triggers:
+  - trigger: state
+    entity_id: !input blackout_lights
   - trigger: event
     id: panel_ui
     event_type: esphome.nspanel_alarm
@@ -385,7 +424,7 @@ actions:
         {% endfor %}
         {{ ns.mask }}
   - if: >-
-      {{ weather_entities | length > 1 or display_entities | length > 4 or
+      {{ blackout_lights | length > 1 or weather_entities | length > 1 or display_entities | length > 4 or
          climate_entities | length > 1 or humidifier_entities | length > 1 }}
     then:
       - stop: Select at most one weather/thermostat/humidifier and four display entities.
@@ -499,6 +538,23 @@ actions:
       - if: "{{ request != 'schedule_changed' }}"
         then:
           - stop: Explicit panel request handled or ignored. Values refresh from authoritative HA state.
+  - variables:
+      night_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_night_schedule' }}"
+  - if: "{{ has_service('esphome', night_action.split('.')[1]) }}"
+    then:
+      - action: "{{ night_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          schedule_enabled: "{{ schedule_enabled }}"
+          blackout_enabled: "{{ blackout_enabled }}"
+          blackout_light: "{{ blackout_lights | length == 1 }}"
+          light_off: "{{ blackout_lights | length == 1 and is_state(blackout_lights[0], 'off') }}"
+          light_valid: "{{ blackout_lights | length == 1 and states(blackout_lights[0]) in ['on','off'] }}"
+          schedule_start: "{{ schedule_start.split(':')[0] | int * 60 + schedule_start.split(':')[1] | int }}"
+          schedule_end: "{{ schedule_end.split(':')[0] | int * 60 + schedule_end.split(':')[1] | int }}"
+          blackout_start: "{{ blackout_start.split(':')[0] | int * 60 + blackout_start.split(':')[1] | int }}"
+          blackout_end: "{{ blackout_end.split(':')[0] | int * 60 + blackout_end.split(':')[1] | int }}"
   - variables:
       button_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_button_settings' }}"
   - if: "{{ has_service('esphome', button_action.split('.')[1]) }}"

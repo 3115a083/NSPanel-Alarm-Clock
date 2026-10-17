@@ -1,4 +1,11 @@
 globals:
+  - {id: wa_schedule_enabled, type: bool, restore_value: yes, initial_value: 'false'}
+  - {id: wa_schedule_start, type: int, restore_value: yes, initial_value: '1320'}
+  - {id: wa_schedule_end, type: int, restore_value: yes, initial_value: '420'}
+  - {id: wa_blackout_enabled, type: bool, restore_value: yes, initial_value: 'false'}
+  - {id: wa_blackout_start, type: int, restore_value: yes, initial_value: '1380'}
+  - {id: wa_blackout_end, type: int, restore_value: yes, initial_value: '360'}
+  - {id: wa_blackout_light, type: bool, restore_value: yes, initial_value: 'false'}
   - {id: wa_button_normal_left_short, type: int, restore_value: yes, initial_value: '6'}
   - {id: wa_button_normal_right_short, type: int, restore_value: yes, initial_value: '7'}
   - {id: wa_button_normal_left_long, type: int, restore_value: yes, initial_value: '3'}
@@ -29,6 +36,35 @@ uart:
 
 api:
   actions:
+    - action: alarm_night_schedule
+      variables:
+        expected_device: string
+        expected_mac: string
+        schedule_enabled: bool
+        schedule_start: int
+        schedule_end: int
+        blackout_enabled: bool
+        blackout_start: int
+        blackout_end: int
+        blackout_light: bool
+        light_off: bool
+        light_valid: bool
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) ||
+                schedule_start < 0 || schedule_start > 1439 || schedule_end < 0 || schedule_end > 1439 ||
+                blackout_start < 0 || blackout_start > 1439 || blackout_end < 0 || blackout_end > 1439) return;
+            id(wa_schedule_enabled) = schedule_enabled;
+            id(wa_schedule_start) = schedule_start;
+            id(wa_schedule_end) = schedule_end;
+            id(wa_blackout_enabled) = blackout_enabled;
+            id(wa_blackout_start) = blackout_start;
+            id(wa_blackout_end) = blackout_end;
+            id(wa_blackout_light) = blackout_light;
+            auto &ui = wake_alarm::panel_controls();
+            ui.light_off = light_off;
+            ui.light_valid = light_valid;
+            ui.light_ms = millis();
     - action: alarm_button_settings
       variables:
         expected_device: string
@@ -69,7 +105,7 @@ api:
         - lambda: |-
             if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) ||
                 night_mode < 0 || night_mode > 2 || timeout_seconds < 0 || timeout_seconds > 86400 ||
-                night_brightness < 0 || night_brightness > 10 || awake_brightness < 1 || awake_brightness > 100 ||
+                night_brightness < 0 || night_brightness > 100 || awake_brightness < 1 || awake_brightness > 100 ||
                 prewake_minutes < 0 || prewake_minutes > 60 || agenda_seconds < 0 || agenda_seconds > 3600) return;
             id(wa_twelve_hour) = twelve_hour;
             id(wa_night_mode) = night_mode;

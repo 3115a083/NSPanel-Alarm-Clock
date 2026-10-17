@@ -77,13 +77,21 @@ interval:
           if (!state.ready || id(disp1).queue_size() > 8) return;
           auto &ui = wake_alarm::panel_controls();
           ui.twelve = id(wa_twelve_hour);
-          ui.night_mode = id(wa_night_mode);
+          ui.night_schedule.enabled = id(wa_schedule_enabled);
+          ui.night_schedule.start = id(wa_schedule_start);
+          ui.night_schedule.end = id(wa_schedule_end);
+          ui.night_schedule.blackout = id(wa_blackout_enabled);
+          ui.night_schedule.black_start = id(wa_blackout_start);
+          ui.night_schedule.black_end = id(wa_blackout_end);
+          ui.night_schedule.requires_light = id(wa_blackout_light);
           ui.timeout_s = id(wa_night_timeout);
           ui.night_brightness = id(wa_night_brightness);
           ui.prewake_minutes = id(wa_prewake_minutes);
           ui.agenda_after_stop_s = id(wa_agenda_seconds);
           const auto now = id(time_provider).now();
           const bool valid = now.is_valid() && now.timestamp > 1735689600;
+          ui.night_mode = ui.night_schedule.mode(id(wa_night_mode), now.hour * 60 + now.minute, valid,
+              ui.light_off, ui.light_valid && uint32_t(millis() - ui.light_ms) <= 600000);
           const auto next = valid && id(wa_enabled) ? wake_alarm::next_alarm(now.timestamp,
               id(wa_hour), id(wa_minute), id(wa_weekmask), id(wa_last_fired_ymd),
               {{{id(wa_plan_date0), id(wa_plan_epoch0), id(wa_plan_source0)},

@@ -26,6 +26,22 @@ to ordinary inactivity behavior. A first touch/button press in night mode only
 wakes the display, without accidentally editing or controlling anything.
 Incoming weather/data refreshes do not count as user activity.
 
+Screensaver availability is **all day** by default ("always"); inactivity still
+allows temporary interactive use. Enable its time window, e.g. 22:00–07:00,
+for scheduled operation. Brightness is selectable from 0–100%. A separate
+backlight-off window, e.g. 23:00–06:00, can require one selected light to be off.
+Then BOTH window and light-off must hold. No light selection makes that window
+unconditional. Backlight-off wins over the dim window; outside both windows the
+ordinary awake brightness applies. Windows support midnight and include their
+start but exclude their end; equal endpoints mean all day. They use the panel's
+configured local timezone. Without valid time, timed rules stay inactive.
+
+Times/configuration persist locally, so the dim schedule works without HA.
+The selected light is reported by HA on changes and each five-minute refresh;
+unknown/unavailable or older-than-ten-minute state does not trigger conditional
+blackout. It falls back to the ordinary screensaver rule. A touch/button still
+wakes temporarily, and ringing/prewake illumination has priority over blackout.
+
 Select **24h** or **12h**. In 12h mode AM/PM is placed in a text-capable field;
 the large numeric fonts continue receiving only digits and a colon. Snooze
 shows remaining **minutes:seconds**, independent of clock format. Countdown is
