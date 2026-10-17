@@ -4,6 +4,19 @@
 #include <string>
 #include <algorithm>
 namespace wake_alarm {
+struct TonePreview {
+  bool active{false};
+  uint32_t started{0};
+  bool begin(int preset,uint32_t now,bool pending,bool busy) {
+    if (preset<0 || preset>3 || pending || busy) return false;
+    active=true; started=now; return true;
+  }
+  bool stop() { const bool previous=active; active=false; return previous; }
+  bool tick(uint32_t now,bool pending,bool busy) {
+    return active && (pending || busy || uint32_t(now-started)>=5000) ? stop() : false;
+  }
+};
+inline TonePreview &tone_preview() { static TonePreview state; return state; }
 inline const char *alarm_tone(int preset) {
   static const char *tones[] = {
     "Wake:d=8,o=6,b=175:c,p,c,p,g,p,g,p,a,p,g,p",

@@ -6,6 +6,10 @@ Home Assistant alarm-clock prototype for original Sonoff NSPanel EU/US (not Pro)
 
 ## What is implemented
 
+- [Blueprint and UI review](docs/BLUEPRINT-AND-UI-REVIEW.md): grouped settings,
+  direct page menu, separate hour/minute controls, bounded tone preview and
+  optional physical-button labels that follow normal/alarm mappings.
+
 - Standalone [relay rules, tone presets and event screens](docs/RELAYS-AND-EVENTS.md):
   local bounded output timers, explicit HA conditions, manual takeover and
   confirmed doorbell/alert actions. Outputs remain opt-in; hardware acceptance is open.

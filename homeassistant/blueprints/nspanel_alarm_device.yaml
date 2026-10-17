@@ -1,5 +1,5 @@
 blueprint:
-  name: NSPanel Alarm Clock | Device Setup, App Import and Calendar
+  name: NSPanel Alarm Clock | Setup and Controls
   description: >-
     Configure the local NSPanel alarm. Priority per date: valid app alarm,
     calendar wake time inside the selected range, regular weekly alarm.
@@ -17,7 +17,8 @@ blueprint:
     min_version: 2026.10.1
   input:
     panel:
-      name: NSPanel device
+      name: 1. Device and source-helper mapping
+      description: Select the panel once. Source helpers are mapped here; their on/off state enables app/calendar wake sources.
       input:
         panel_device:
           name: NSPanel device
@@ -25,14 +26,29 @@ blueprint:
           selector:
             device:
               filter: {integration: esphome}
+        app_enabled_helper:
+          name: Enable app alarm import helper
+          description: Required mapping for compatibility. Leave the corresponding enable helper off when that source is unused.
+          selector: {entity: {filter: {domain: input_boolean}}}
+        app_time_helper:
+          name: Imported alarm helper (date AND time)
+          description: Required mapping for compatibility. Leave the corresponding enable helper off when that source is unused.
+          selector: {entity: {filter: {domain: input_datetime}}}
+        calendar_enabled_helper:
+          name: Enable calendar alarms helper
+          description: Required mapping for compatibility. Leave the corresponding enable helper off when that source is unused.
+          selector: {entity: {filter: {domain: input_boolean}}}
     regular:
-      name: Regular alarm
+      name: 2. Weekly alarm and master switch
+      description: "Priority per date: imported app alarm, eligible calendar appointment, weekly fallback. Off master prevents all future schedules."
       input:
         enabled_helper:
-          name: Master enabled helper
+          name: Allow scheduled alarms - master switch helper
+          description: Off prevents future weekly, app and calendar alarms. It does not acknowledge an alarm already ringing.
           selector: {entity: {filter: {domain: input_boolean}}}
         time_helper:
-          name: Regular alarm time helper (time only)
+          name: Weekly fallback time - time-only helper
+          description: Touch Save updates this helper. App or calendar dates remain separate.
           selector: {entity: {filter: {domain: input_datetime}}}
         weekdays:
           name: Regular alarm weekdays
@@ -54,19 +70,122 @@ blueprint:
           default: 9
           selector: {number: {min: 1, max: 60, step: 1, mode: box}}
         buzzer_grace:
-          name: Mandatory buzzer delay in seconds
+          name: Internal buzzer delay after alarm starts (seconds)
           description: Use 0 for immediate buzzer. Remote audio never disables it.
           default: 15
           selector: {number: {min: 0, max: 120, step: 1, mode: box}}
-    app:
-      name: App alarm import
+    display:
+      name: 3. Display pages and appliance control
+      description: Selected sources enable pages automatically. Open Pages by tapping the top title; arrows/swipes skip the alarm editor. Appliance control remains a separate opt-in.
+      collapsed: true
       input:
-        app_enabled_helper:
-          name: Enable app alarm import helper
-          selector: {entity: {filter: {domain: input_boolean}}}
-        app_time_helper:
-          name: Imported alarm helper (date AND time)
-          selector: {entity: {filter: {domain: input_datetime}}}
+        clock_format:
+          name: Time format
+          default: '24h'
+          selector: {select: {options: ['24h', '12h']}}
+        awake_brightness:
+          name: Awake brightness (%)
+          default: 25
+          selector: {number: {min: 1, max: 100, step: 1, mode: box}}
+        weather_entities:
+          name: Weather page (zero or one)
+          default: []
+          selector: {entity: {filter: {domain: weather}, multiple: true}}
+        display_entities:
+          name: Read-only entity page (up to four)
+          default: []
+          selector: {entity: {filter: [{domain: sensor}, {domain: binary_sensor}, {domain: light}, {domain: switch}], multiple: true}}
+        climate_entities:
+          name: Thermostat page (zero or one)
+          default: []
+          selector: {entity: {filter: {domain: climate}, multiple: true}}
+        climate_control:
+          name: Allow explicit thermostat controls on the panel
+          default: false
+          selector: {boolean: {}}
+        humidifier_entities:
+          name: Humidifier page (zero or one)
+          default: []
+          selector: {entity: {filter: {domain: humidifier}, multiple: true}}
+        humidifier_control:
+          name: Allow explicit humidifier controls on the panel
+          default: false
+          selector: {boolean: {}}
+    agenda:
+      name: 4. Calendar display after waking
+      description: These calendars only populate the display. They do not alter wake times; wake calendars are in section 7.
+      collapsed: true
+      input:
+        agenda_calendars:
+          name: Display calendars (independent of alarm calendars)
+          default: []
+          selector: {entity: {filter: {domain: calendar}, multiple: true}}
+        agenda_filter:
+          name: Agenda title contains (optional, case insensitive)
+          default: ''
+          selector: {text: {}}
+        agenda_after_stop:
+          name: Show calendar page after Stop (seconds; 0 = off)
+          default: 0
+          description: Snooze does not count as getting up. Select Display calendars first.
+          selector: {number: {min: 0, max: 3600, step: 1, mode: box}}
+    night:
+      name: 5. Screensaver and lights-out schedule
+      description: Dim retains the clock; 0% backlight is unreadable in a dark room. Inactivity applies inside the selected window or all day. Lights-out overrides dimming.
+      collapsed: true
+      input:
+        night_mode:
+          name: Screensaver
+          description: Dim keeps the clock and next alarm visible. Black turns the backlight off.
+          default: dim
+          selector: {select: {options: [dim, black, disabled]}}
+        night_timeout:
+          name: Inactivity before screensaver (seconds, 0 disables)
+          default: 30
+          selector: {number: {min: 0, max: 86400, step: 1, mode: box}}
+        night_brightness:
+          name: Dim clock brightness (%)
+          default: 1
+          selector: {number: {min: 0, max: 100, step: 1, mode: box}}
+        schedule_enabled:
+          name: Limit screensaver to a time window (off = all day)
+          default: false
+          selector: {boolean: {}}
+        schedule_start:
+          name: Screensaver window starts
+          default: '22:00:00'
+          selector: {time: {}}
+        schedule_end:
+          name: Screensaver window ends
+          description: Overnight supported. Equal start/end means all day. Inactivity still applies.
+          default: '07:00:00'
+          selector: {time: {}}
+        blackout_enabled:
+          name: Enable a separate backlight-off window
+          default: false
+          selector: {boolean: {}}
+        blackout_start:
+          name: Backlight-off window starts
+          default: '23:00:00'
+          selector: {time: {}}
+        blackout_end:
+          name: Backlight-off window ends
+          default: '06:00:00'
+          selector: {time: {}}
+        blackout_lights:
+          name: Turn backlight off only if this light is off (zero or one)
+          description: Empty means unconditional inside the backlight-off window. Unknown/stale light never enables blackout. Touch wakes temporarily; ringing always wakes.
+          default: []
+          selector: {entity: {filter: {domain: light}, multiple: true}}
+        prewake_minutes:
+          name: Wake the display this many minutes before the alarm (0 disables)
+          default: 0
+          selector: {number: {min: 0, max: 60, step: 1, mode: box}}
+    app:
+      name: 6. Optional app alarm import
+      description: Only active when the mapped App Import helper is on. Android sensor is optional; an authenticated integration can set the date-and-time helper instead.
+      collapsed: true
+      input:
         app_entities:
           name: Android next alarm sensor (zero or one)
           description: >-
@@ -94,11 +213,10 @@ blueprint:
                 - {label: Keep an already committed app alarm, value: keep_committed}
                 - {label: Clear app alarm and use fallback, value: clear}
     calendar:
-      name: Calendar wake range
+      name: 7. Optional calendar wake adjustment
+      description: "Only active when the mapped Calendar Alarm helper is on. Example: appointment 08:00 minus 30 min gives 07:30. A late appointment outside the allowed range uses weekly fallback."
+      collapsed: true
       input:
-        calendar_enabled_helper:
-          name: Enable calendar alarms helper
-          selector: {entity: {filter: {domain: input_boolean}}}
         calendars:
           name: Calendars to inspect
           default: []
@@ -131,19 +249,196 @@ blueprint:
           name: Allow calendar alarms on unselected weekdays
           default: false
           selector: {boolean: {}}
-
-    outputs:
-      name: Alarm tone and local relay rules
-      description: Standalone relay rules are opt-in. Test alarms also trigger them. Manual switching cancels an owned timer. A reboot starts both relays OFF.
+    tones:
+      name: 8. Alarm tone and harmless preview
+      description: Use Preview Selected/Configured Tone and Stop Tone Preview on the ESPHome device. Preview lasts at most 5 s, changes no alarm time and triggers no relay. Test Alarm is a real alarm and CAN trigger enabled relays.
+      collapsed: true
       input:
         alarm_tone:
           name: Mandatory local alarm tone
           default: wake
           selector: {select: {options: [wake, classic, gentle, signal]}}
+        preview_request_helpers:
+          name: Optional tone-preview button helper (zero or one)
+          description: Press this input_button to hear the selected alarm tone for at most 5 seconds. This is NOT Test Alarm and never triggers relays. Without a helper, use Preview Selected/Configured Tone on the panel device.
+          default: []
+          selector: {entity: {filter: {domain: input_button}, multiple: true}}
+    buttons:
+      name: 9. Physical buttons - normal operation
+      description: Short acts on release, hold at 0.8 s. Right hold for 5 s always stops an alarm. Decrease/increase only work in editor or appliance screens; use Previous/Next for direct page navigation.
+      collapsed: true
+      input:
+        normal_left_short:
+          name: Normal - left short
+          default: minus
+          selector:
+            select:
+              options:
+                - {label: "No action", value: none}
+                - {label: "Snooze (ringing alarm only)", value: snooze}
+                - {label: "Stop pending alarm", value: stop}
+                - {label: "Previous page", value: previous}
+                - {label: "Next page", value: next}
+                - {label: "Open alarm-time editor", value: editor}
+                - {label: "Decrease selected editor/appliance value", value: minus}
+                - {label: "Increase selected editor/appliance value", value: plus}
+                - {label: "Run custom Home Assistant action", value: custom}
+        normal_right_short:
+          name: Normal - right short
+          default: plus
+          selector:
+            select:
+              options:
+                - {label: "No action", value: none}
+                - {label: "Snooze (ringing alarm only)", value: snooze}
+                - {label: "Stop pending alarm", value: stop}
+                - {label: "Previous page", value: previous}
+                - {label: "Next page", value: next}
+                - {label: "Open alarm-time editor", value: editor}
+                - {label: "Decrease selected editor/appliance value", value: minus}
+                - {label: "Increase selected editor/appliance value", value: plus}
+                - {label: "Run custom Home Assistant action", value: custom}
+        normal_left_long:
+          name: Normal - left long
+          default: previous
+          selector:
+            select:
+              options:
+                - {label: "No action", value: none}
+                - {label: "Snooze (ringing alarm only)", value: snooze}
+                - {label: "Stop pending alarm", value: stop}
+                - {label: "Previous page", value: previous}
+                - {label: "Next page", value: next}
+                - {label: "Open alarm-time editor", value: editor}
+                - {label: "Decrease selected editor/appliance value", value: minus}
+                - {label: "Increase selected editor/appliance value", value: plus}
+                - {label: "Run custom Home Assistant action", value: custom}
+        normal_right_long:
+          name: Normal - right long
+          default: next
+          selector:
+            select:
+              options:
+                - {label: "No action", value: none}
+                - {label: "Snooze (ringing alarm only)", value: snooze}
+                - {label: "Stop pending alarm", value: stop}
+                - {label: "Previous page", value: previous}
+                - {label: "Next page", value: next}
+                - {label: "Open alarm-time editor", value: editor}
+                - {label: "Decrease selected editor/appliance value", value: minus}
+                - {label: "Increase selected editor/appliance value", value: plus}
+                - {label: "Run custom Home Assistant action", value: custom}
+        show_button_labels:
+          name: Show physical-button labels at the bottom of the display
+          description: Left/right labels sit directly above the physical buttons. S means short press, H means hold. They follow normal/alarm mappings and disappear in night mode. None means no action in the current screen.
+          default: true
+          selector: {boolean: {}}
+    alarm_buttons:
+      name: 10. Physical buttons - pending alarm or Snooze
+      description: The alarm owns the display. Choose Snooze, Stop, no action or an explicit custom action. Page/editor choices previously ignored in this state are no longer offered.
+      collapsed: true
+      input:
+        alarm_left_short:
+          name: Alarm - left short
+          default: snooze
+          selector:
+            select:
+              options:
+                - {label: "No action", value: none}
+                - {label: "Snooze (ringing alarm only)", value: snooze}
+                - {label: "Stop pending alarm", value: stop}
+                - {label: "Run custom Home Assistant action", value: custom}
+        alarm_right_short:
+          name: Alarm - right short
+          default: stop
+          selector:
+            select:
+              options:
+                - {label: "No action", value: none}
+                - {label: "Snooze (ringing alarm only)", value: snooze}
+                - {label: "Stop pending alarm", value: stop}
+                - {label: "Run custom Home Assistant action", value: custom}
+        alarm_left_long:
+          name: Alarm - left long
+          default: snooze
+          selector:
+            select:
+              options:
+                - {label: "No action", value: none}
+                - {label: "Snooze (ringing alarm only)", value: snooze}
+                - {label: "Stop pending alarm", value: stop}
+                - {label: "Run custom Home Assistant action", value: custom}
+        alarm_right_long:
+          name: Alarm - right long
+          default: stop
+          selector:
+            select:
+              options:
+                - {label: "No action", value: none}
+                - {label: "Snooze (ringing alarm only)", value: snooze}
+                - {label: "Stop pending alarm", value: stop}
+                - {label: "Run custom Home Assistant action", value: custom}
+    custom_buttons:
+      name: 11. Custom button actions and on-screen names
+      description: Each sequence is shared by normal/alarm mappings that select Custom for that gesture. Delegate long sequences to HA scripts because this setup automation uses restart mode.
+      collapsed: true
+      input:
+        custom_left_short:
+          name: Custom HA action - left short
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        custom_right_short:
+          name: Custom HA action - right short
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        custom_left_long:
+          name: Custom HA action - left long
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        custom_right_long:
+          name: Custom HA action - right long
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        label_left_short:
+          name: Display name for custom left short action
+          description: Optional short name, up to 8 visible ASCII characters. Used when this gesture is assigned Custom, in either operating state.
+          default: Custom
+          selector: {text: {}}
+        label_right_short:
+          name: Display name for custom right short action
+          description: Optional short name, up to 8 visible ASCII characters. Used when this gesture is assigned Custom, in either operating state.
+          default: Custom
+          selector: {text: {}}
+        label_left_long:
+          name: Display name for custom left long action
+          description: Optional short name, up to 8 visible ASCII characters. Used when this gesture is assigned Custom, in either operating state.
+          default: Custom
+          selector: {text: {}}
+        label_right_long:
+          name: Display name for custom right long action
+          description: Optional short name, up to 8 visible ASCII characters. Used when this gesture is assigned Custom, in either operating state.
+          default: Custom
+          selector: {text: {}}
+    outputs:
+      name: 12. Relay 1 - optional local alarm output
+      description: Off by default. Test Alarm triggers enabled rules too. Pulse uses Duration from switch-on; run-on uses Duration from Stop. Maximum automatic on-time always wins. Manual override cancels owned timers.
+      collapsed: true
+      input:
         relay1_mode:
           name: Relay 1 - alarm behavior
           default: 'off'
-          selector: {select: {options: ['off', pulse, until_stop, latch, after_stop]}}
+          selector:
+            select:
+              options:
+                - {label: "Disabled", value: "off"}
+                - {label: "Pulse, then switch off", value: "pulse"}
+                - {label: "On until Stop", value: "until_stop"}
+                - {label: "Keep on after Stop (maximum time still applies)", value: "latch"}
+                - {label: "On during alarm, then run on after Stop", value: "after_stop"}
         relay1_delay:
           name: Relay 1 - delay before switching on (seconds)
           default: 0
@@ -177,11 +472,27 @@ blueprint:
         relay1_condition_mode:
           name: Relay 1 - combine conditions
           default: all
-          selector: {select: {options: [all, any]}}
+          selector:
+            select:
+              options:
+                - {label: 'AND: every selected condition is on', value: all}
+                - {label: 'OR: at least one selected condition is on', value: any}
+    relay2:
+      name: 13. Relay 2 - optional local alarm output
+      description: Same independent rules as Relay 1. Empty conditions allow local offline operation; unknown or stale selected conditions block a new switch-on.
+      collapsed: true
+      input:
         relay2_mode:
           name: Relay 2 - alarm behavior
           default: 'off'
-          selector: {select: {options: ['off', pulse, until_stop, latch, after_stop]}}
+          selector:
+            select:
+              options:
+                - {label: "Disabled", value: "off"}
+                - {label: "Pulse, then switch off", value: "pulse"}
+                - {label: "On until Stop", value: "until_stop"}
+                - {label: "Keep on after Stop (maximum time still applies)", value: "latch"}
+                - {label: "On during alarm, then run on after Stop", value: "after_stop"}
         relay2_delay:
           name: Relay 2 - delay before switching on (seconds)
           default: 0
@@ -215,163 +526,21 @@ blueprint:
         relay2_condition_mode:
           name: Relay 2 - combine conditions
           default: all
-          selector: {select: {options: [all, any]}}
-
-    buttons:
-      name: Physical buttons (normal and alarm)
-      description: Short acts on release; long at 0.8 seconds. Right hold for 5 seconds always stops an alarm. Navigation/editor actions wait until alarm acknowledgement.
-      input:
-        normal_left_short:
-          name: Normal - left short
-          default: minus
-          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
-        normal_right_short:
-          name: Normal - right short
-          default: plus
-          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
-        normal_left_long:
-          name: Normal - left long
-          default: previous
-          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
-        normal_right_long:
-          name: Normal - right long
-          default: next
-          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
-        alarm_left_short:
-          name: Alarm - left short
-          default: snooze
-          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
-        alarm_right_short:
-          name: Alarm - right short
-          default: stop
-          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
-        alarm_left_long:
-          name: Alarm - left long
-          default: snooze
-          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
-        alarm_right_long:
-          name: Alarm - right long
-          default: stop
-          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
-        custom_left_short:
-          name: Custom HA action - left short
-          description: Runs only when the corresponding normal/alarm mapping is custom.
-          default: []
-          selector: {action: {}}
-        custom_right_short:
-          name: Custom HA action - right short
-          description: Runs only when the corresponding normal/alarm mapping is custom.
-          default: []
-          selector: {action: {}}
-        custom_left_long:
-          name: Custom HA action - left long
-          description: Runs only when the corresponding normal/alarm mapping is custom.
-          default: []
-          selector: {action: {}}
-        custom_right_long:
-          name: Custom HA action - right long
-          description: Runs only when the corresponding normal/alarm mapping is custom.
-          default: []
-          selector: {action: {}}
-
-    display:
-      name: Clock, screensaver and optional pages
-      input:
-        clock_format:
-          name: Time format
-          default: '24h'
-          selector: {select: {options: ['24h', '12h']}}
-        night_mode:
-          name: Screensaver
-          description: Dim keeps the clock and next alarm visible. Black turns the backlight off.
-          default: dim
-          selector: {select: {options: [dim, black, disabled]}}
-        schedule_enabled:
-          name: Limit screensaver to a time window (off = all day)
-          default: false
-          selector: {boolean: {}}
-        schedule_start:
-          name: Screensaver window starts
-          default: '22:00:00'
-          selector: {time: {}}
-        schedule_end:
-          name: Screensaver window ends
-          description: Overnight supported. Equal start/end means all day. Inactivity still applies.
-          default: '07:00:00'
-          selector: {time: {}}
-        blackout_enabled:
-          name: Enable a separate backlight-off window
-          default: false
-          selector: {boolean: {}}
-        blackout_start:
-          name: Backlight-off window starts
-          default: '23:00:00'
-          selector: {time: {}}
-        blackout_end:
-          name: Backlight-off window ends
-          default: '06:00:00'
-          selector: {time: {}}
-        blackout_lights:
-          name: Turn backlight off only if this light is off (zero or one)
-          description: Empty means unconditional inside the backlight-off window. Unknown/stale light never enables blackout. Touch wakes temporarily; ringing always wakes.
-          default: []
-          selector: {entity: {filter: {domain: light}, multiple: true}}
-        night_timeout:
-          name: Inactivity before screensaver (seconds, 0 disables)
-          default: 30
-          selector: {number: {min: 0, max: 86400, step: 1, mode: box}}
-        night_brightness:
-          name: Dim clock brightness (%)
-          default: 1
-          selector: {number: {min: 0, max: 100, step: 1, mode: box}}
-        awake_brightness:
-          name: Awake brightness (%)
-          default: 25
-          selector: {number: {min: 1, max: 100, step: 1, mode: box}}
-        prewake_minutes:
-          name: Wake the display this many minutes before the alarm (0 disables)
-          default: 0
-          selector: {number: {min: 0, max: 60, step: 1, mode: box}}
-        weather_entities:
-          name: Weather page (zero or one)
-          default: []
-          selector: {entity: {filter: {domain: weather}, multiple: true}}
-        display_entities:
-          name: Read-only entity page (up to four)
-          default: []
-          selector: {entity: {filter: [{domain: sensor}, {domain: binary_sensor}, {domain: light}, {domain: switch}], multiple: true}}
-        climate_entities:
-          name: Thermostat page (zero or one)
-          default: []
-          selector: {entity: {filter: {domain: climate}, multiple: true}}
-        climate_control:
-          name: Allow explicit thermostat controls on the panel
-          default: false
-          selector: {boolean: {}}
-        humidifier_entities:
-          name: Humidifier page (zero or one)
-          default: []
-          selector: {entity: {filter: {domain: humidifier}, multiple: true}}
-        humidifier_control:
-          name: Allow explicit humidifier controls on the panel
-          default: false
-          selector: {boolean: {}}
-        agenda_calendars:
-          name: Display calendars (independent of alarm calendars)
-          default: []
-          selector: {entity: {filter: {domain: calendar}, multiple: true}}
-        agenda_filter:
-          name: Agenda title contains (optional, case insensitive)
-          default: ''
-          selector: {text: {}}
-        agenda_after_stop:
-          name: Show agenda after Stop (seconds, 0 disables; Snooze does not count)
-          default: 0
-          selector: {number: {min: 0, max: 3600, step: 1, mode: box}}
+          selector:
+            select:
+              options:
+                - {label: 'AND: every selected condition is on', value: all}
+                - {label: 'OR: at least one selected condition is on', value: any}
 
 mode: restart
 max_exceeded: silent
 variables:
+  preview_request_helpers: !input preview_request_helpers
+  show_button_labels: !input show_button_labels
+  label_left_short: !input label_left_short
+  label_right_short: !input label_right_short
+  label_left_long: !input label_left_long
+  label_right_long: !input label_right_long
   alarm_tone: !input alarm_tone
   relay1_mode: !input relay1_mode
   relay1_delay: !input relay1_delay
@@ -440,6 +609,17 @@ variables:
   calendar_mode: !input calendar_mode
   calendar_free_days: !input calendar_free_days
 triggers:
+  - trigger: state
+    id: tone_preview
+    entity_id: !input preview_request_helpers
+  - trigger: template
+    id: panel_available
+    value_template: >-
+      {% set ns=namespace(ready=false) %}
+      {% for entity in device_entities(panel_device) %}
+        {% if entity in integration_entities('esphome') and states(entity).startswith('NSPALARM1|') %}{% set ns.ready=true %}{% endif %}
+      {% endfor %}
+      {{ ns.ready }}
   - trigger: state
     entity_id: !input relay1_conditions
   - trigger: state
@@ -531,6 +711,49 @@ actions:
           {% if day in weekdays %}{% set ns.mask = ns.mask + 2 ** loop.index0 %}{% endif %}
         {% endfor %}
         {{ ns.mask }}
+  - if: "{{ trigger is defined and trigger.id | default('') == 'tone_preview' }}"
+    then:
+      - condition: template
+        value_template: >-
+          {{ preview_request_helpers | length == 1 and trigger.to_state is defined and trigger.to_state is not none and
+             trigger.to_state.entity_id == preview_request_helpers[0] and
+             (trigger.from_state is none or trigger.from_state.state != trigger.to_state.state) and
+             as_timestamp(trigger.to_state.state,0) > as_timestamp(now()) - 5 and
+             as_timestamp(trigger.to_state.state,0) <= as_timestamp(now()) + 1 }}
+      - variables:
+          preview_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_preview_tone' }}"
+      - condition: template
+        value_template: "{{ has_service('esphome',preview_action.split('.')[1]) }}"
+      - action: "{{ preview_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          preset: "{{ ['wake','classic','gentle','signal'].index(alarm_tone) }}"
+      - stop: Tone preview requested. No schedule, relay or display settings changed.
+  - variables:
+      pages_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_page_settings' }}"
+      labels_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_button_labels' }}"
+      requested_page_mask: "{{ 3 + (4 if weather_entities else 0) + (8 if display_entities else 0) + (16 if climate_entities else 0) + (32 if humidifier_entities else 0) + (64 if agenda_calendars else 0) }}"
+  - if: "{{ has_service('esphome',pages_action.split('.')[1]) }}"
+    then:
+      - action: "{{ pages_action }}"
+        continue_on_error: true
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          page_mask: "{{ requested_page_mask }}"
+  - if: "{{ has_service('esphome',labels_action.split('.')[1]) }}"
+    then:
+      - action: "{{ labels_action }}"
+        continue_on_error: true
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          visible: "{{ show_button_labels }}"
+          left_short: "{{ label_left_short }}"
+          right_short: "{{ label_right_short }}"
+          left_long: "{{ label_left_long }}"
+          right_long: "{{ label_right_long }}"
   - if: >-
       {{ blackout_lights | length > 1 or weather_entities | length > 1 or display_entities | length > 4 or
          climate_entities | length > 1 or humidifier_entities | length > 1 }}

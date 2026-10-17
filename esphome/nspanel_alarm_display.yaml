@@ -64,7 +64,7 @@ button:
           wake_alarm::display_state().setup();
           ESP_LOGI("wake_alarm.ui", "TFT upload finished: %s", result ? "success" : "failed");
 interval:
-  - interval: 1s
+  - interval: 250ms
     then:
       - lambda: |-
           auto &state = wake_alarm::display_state();
@@ -110,25 +110,35 @@ interval:
             state.brightness = brightness;
           }
           const auto page = ui.dark ? wake_alarm::PanelPage::CLOCK : ui.page;
+          const bool menu = ui.menu_open && !ui.dark && !showing_notice && !id(wa_unacknowledged);
+          const bool editor = page==wake_alarm::PanelPage::ALARM && !menu && !showing_notice;
           const bool clock_page = page == wake_alarm::PanelPage::CLOCK;
           static int previous_style = -1;
-          const int style = int(page) + (ui.dark ? 16 : 0) + (ui.twelve ? 32 : 0) + (id(wa_ringing) ? 64 : 0) + (showing_notice ? 128 : 0);
+          const int style = int(page) + (ui.dark ? 16 : 0) + (ui.twelve ? 32 : 0) + (id(wa_ringing) ? 64 : 0) + (showing_notice ? 128 : 0) + (menu ? 256 : 0);
           if (style != previous_style || wake_alarm::clock_renderer().fresh) {
+            id(disp1).send_command("fill 0,40,480,222,0");
             static const char *titles[] = {"ALARM CLOCK", "SET ALARM", "WEATHER", "ENTITIES", "THERMOSTAT", "HUMIDIFIER", "CALENDAR"};
-            id(disp1).set_component_text("wa_title", id(wa_ringing) ? "ALARM" : showing_notice ? "NOTIFICATION" : titles[int(page)]);
+            id(disp1).set_component_text("wa_title", id(wa_ringing) ? "ALARM" : showing_notice ? "NOTIFICATION" : menu ? "SELECT PAGE" : titles[int(page)]);
+            id(disp1).set_component_font("wa_title", 1);
             id(disp1).set_component_font("wa_state", 1);
             id(disp1).send_command_printf("wa_state.pco=%d", id(wa_ringing) ? 63488 : 65535);
             id(disp1).set_component_font("wa_enabled", 1);
             id(disp1).set_component_font("wa_date", 1);
             id(disp1).set_component_font("wa_time", !showing_notice && (clock_page || page == wake_alarm::PanelPage::ALARM) ? 6 : 2);
             id(disp1).set_component_font("wa_alarm", clock_page && !showing_notice ? 5 : 1);
-            for (const auto *name : {"wa_title", "wa_state", "wa_date", "wa_enabled", "wa_days"})
-              id(disp1).send_command_printf("vis %s,%d", name,
-                  !ui.dark || (ui.twelve && std::string(name) == "wa_date") ? 1 : 0);
+            for (const auto *name : {"wa_title", "wa_state", "wa_time", "wa_date", "wa_label", "wa_alarm", "wa_enabled", "wa_days"}) {
+              const std::string field(name);
+              bool visible=!menu || field=="wa_title" || field=="wa_state";
+              if (field=="wa_days") visible=false;
+              if (editor && (field=="wa_label" || field=="wa_alarm" || field=="wa_enabled")) visible=false;
+              if (ui.dark && (field=="wa_title" || field=="wa_state" || field=="wa_enabled" || field=="wa_date"))
+                visible=field=="wa_date" && ui.twelve;
+              id(disp1).send_command_printf("vis %s,%d",name,visible?1:0);
+            }
             id(disp1).send_command_printf("wa_time.pco=%d", ui.dark ? 16904 : 65535);
             id(disp1).send_command_printf("wa_alarm.pco=%d", ui.dark ? 16904 : 65535);
             id(disp1).send_command_printf("wa_date.pco=%d", ui.dark ? 16904 : 52857);
-            id(disp1).send_command("fill 20,282,440,26,0");
+            id(disp1).send_command("fill 0,264,480,56,0");
             wake_alarm::clock_renderer().reset(); previous_style = style;
           }
           auto view = wake_alarm::clock_view(valid, now.hour, now.minute, now.year, now.month,
@@ -158,9 +168,9 @@ interval:
             if (!ui.editing) ui.begin_edit(id(wa_hour), id(wa_minute), id(wa_enabled));
             const auto weekdays = view.text[6];
             view.text = {"Draft", wake_alarm::clock_digits(ui.draft_hour, ui.draft_minute, ui.twelve),
-                "Tap time: choose hour/minute", ui.edit_minute ? "Editing MINUTE" : "Editing HOUR", "",
+                weekdays.substr(0,24) + (ui.edit_minute ? " | MIN" : " | HOUR"), "", "",
                 ui.draft_enabled ? "On (tap)" : "Off (tap)", ""};
-            view.text[4] = weekdays.substr(0,24);
+            view.text[4] = "";
             if (ui.twelve) view.text[2] = std::string(ui.draft_hour < 12 ? "AM - " : "PM - ") + view.text[2];
             footer = "Save";
           } else if (!clock_page) {
@@ -176,7 +186,7 @@ interval:
             if (page == wake_alarm::PanelPage::CLIMATE) { view.text[1] = card(6); view.text[2] = card(7); }
             if (page == wake_alarm::PanelPage::HUMIDIFIER) { view.text[1] = card(8); view.text[2] = card(9); }
             if (page == wake_alarm::PanelPage::AGENDA) { view.text[1] = card(10); view.text[2] = card(11); }
-            footer = page == wake_alarm::PanelPage::CLIMATE || page == wake_alarm::PanelPage::HUMIDIFIER ? "Toggle / body - +" : "Swipe or hold keys";
+            footer = page == wake_alarm::PanelPage::CLIMATE || page == wake_alarm::PanelPage::HUMIDIFIER ? "Toggle" : "Pages";
           }
           if (!ui.notice.empty()) { view.text[0] = "Info"; view.text[2] = ui.notice; }
           if (id(wa_unacknowledged)) footer = id(wa_ringing) ? "Stop alarm" : "Cancel snooze";
@@ -185,6 +195,7 @@ interval:
                 !overlay.action_enabled ? "" : overlay.confirming ? "Tap again within 5 seconds" : "Action needs confirmation", "", "", ""};
             footer = !overlay.action_enabled ? "Dismiss" : overlay.confirming ? "Confirm action" : overlay.action_label;
           }
+          if (menu) { view.text={"Choose", "", "", "", "", "", ""}; footer="Close"; }
           view.text[6] = "";  // Footer drawn at explicit hit-target coordinates.
           const bool fresh = wake_alarm::clock_renderer().fresh;
           wake_alarm::clock_renderer().render(view, [](const char *name, const std::string &text) {
@@ -192,10 +203,46 @@ interval:
           });
           static std::string previous_footer;
           if (!ui.dark && (fresh || footer != previous_footer)) {
-            const char *left = showing_notice ? "Dismiss" : id(wa_unacknowledged) ? (id(wa_ringing) ? "Snooze" : "") : page == wake_alarm::PanelPage::ALARM ? "-" : "<";
-            const char *right = showing_notice ? (overlay.action_enabled ? "Action" : "") : id(wa_unacknowledged) ? "Stop" : page == wake_alarm::PanelPage::ALARM ? "+" : ">";
-            id(disp1).send_command_printf("xstr 20,282,70,26,1,52857,0,1,1,1,\"%s\"", left);
-            id(disp1).send_command_printf("xstr 100,282,280,26,1,52857,0,1,1,1,\"%s\"", footer.c_str());
-            id(disp1).send_command_printf("xstr 390,282,70,26,1,52857,0,1,1,1,\"%s\"", right);
+            const char *left = menu ? "Back" : showing_notice ? "Dismiss" : id(wa_unacknowledged) ? (id(wa_ringing) ? "Snooze" : "") : editor ? "Cancel" : "<";
+            const char *right = menu ? "" : showing_notice ? (overlay.action_enabled ? "Action" : "") : id(wa_unacknowledged) ? "Stop" : editor ? "Pages" : ">";
+            id(disp1).send_command_printf("xstr 20,264,70,26,1,52857,0,1,1,1,\"%s\"", left);
+            id(disp1).send_command_printf("xstr 100,264,280,26,1,52857,0,1,1,1,\"%s\"", footer.c_str());
+            id(disp1).send_command_printf("xstr 390,264,70,26,1,52857,0,1,1,1,\"%s\"", right);
           }
           previous_footer = footer;
+          static int previous_menu_mask=-1;
+          if (menu && (fresh || previous_menu_mask!=ui.pages)) {
+            id(disp1).send_command("fill 0,40,480,222,0");
+            int row=0;
+            for (int i=0;i<7;++i) if (ui.pages&(1<<i))
+              id(disp1).send_command_printf("xstr 20,%d,440,30,1,65535,10597,0,1,1,\"%s\"",42+31*row++,wake_alarm::PanelControls::page_title(i));
+            previous_menu_mask=ui.pages;
+          }
+          if (!menu) previous_menu_mask=-1;
+          static int previous_editor_enabled=-1;
+          if (editor && (fresh || previous_editor_enabled!=int(ui.draft_enabled))) {
+            const char *labels[]={"Hour -","Hour +","Min -","Min +"};
+            const int xs[]={20,130,250,360};
+            for (int i=0;i<4;++i) id(disp1).send_command_printf("xstr %d,184,100,44,1,65535,10597,1,1,1,\"%s\"",xs[i],labels[i]);
+            id(disp1).send_command_printf("xstr 20,234,210,28,1,65535,10597,1,1,1,\"Alarms: %s\"",ui.draft_enabled?"On":"Off");
+            id(disp1).send_command("xstr 250,234,210,28,1,65535,10597,1,1,1,\"Preview tone\"");
+            previous_editor_enabled=ui.draft_enabled;
+          }
+          if (!editor) previous_editor_enabled=-1;
+          const auto effective=[&](int action) {
+            if (!id(wa_unacknowledged) && (action==1 || action==2)) return 0;
+            if (id(wa_unacknowledged) && action==1 && !id(wa_ringing)) return 0;
+            if (!id(wa_unacknowledged) && action>=3 && action<=7 && showing_notice) return 0;
+            if ((action==6 || action==7) && !(editor || (!menu && (page==wake_alarm::PanelPage::CLIMATE || page==wake_alarm::PanelPage::HUMIDIFIER)))) return 0;
+            return action;
+          };
+          std::string hints[2];
+          if (!ui.dark && ui.show_button_labels) {
+            hints[0]=wake_alarm::button_hint(effective(id(wa_unacknowledged)?id(wa_button_alarm_left_short):id(wa_button_normal_left_short)),effective(id(wa_unacknowledged)?id(wa_button_alarm_left_long):id(wa_button_normal_left_long)),ui.custom_labels[0],ui.custom_labels[2]);
+            hints[1]=wake_alarm::button_hint(effective(id(wa_unacknowledged)?id(wa_button_alarm_right_short):id(wa_button_normal_right_short)),effective(id(wa_unacknowledged)?id(wa_button_alarm_right_long):id(wa_button_normal_right_long)),ui.custom_labels[1],ui.custom_labels[3]);
+          }
+          static std::string old_hints[2];
+          for (int i=0;i<2;++i) if (fresh || hints[i]!=old_hints[i]) {
+            id(disp1).send_command_printf("xstr %d,294,220,26,1,33808,0,1,1,1,\"%s\"",i?250:10,hints[i].c_str());
+            old_hints[i]=hints[i];
+          }

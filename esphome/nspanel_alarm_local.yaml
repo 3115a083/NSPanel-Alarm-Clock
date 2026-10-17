@@ -24,6 +24,7 @@ esphome:
     - nspanel_alarm_identity.h
     - nspanel_alarm_controls.h
     - nspanel_alarm_effects_v1.h
+    - alarm_display_state.h
 
 preferences:
   # Restored globals poll every second; sync pending writes at the same cadence.
@@ -96,6 +97,23 @@ globals:
 
 api:
   actions:
+    - action: alarm_preview_tone
+      variables:
+        expected_device: string
+        expected_mac: string
+        preset: int
+      then:
+        - lambda: |-
+            if (wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()))
+              id(wa_preview_tone).execute(preset);
+    - action: alarm_stop_tone_preview
+      variables:
+        expected_device: string
+        expected_mac: string
+      then:
+        - lambda: |-
+            if (wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()))
+              id(wa_stop_preview).execute();
     - action: alarm_tone_settings
       variables:
         expected_device: string
@@ -237,7 +255,26 @@ api:
       then:
         - script.execute: wa_start
 
+select:
+  - platform: template
+    id: wa_preview_choice
+    name: Alarm Clock Preview Tone
+    options: [Wake, Classic, Gentle, Signal]
+    initial_option: Wake
+    optimistic: true
+    restore_value: false
 script:
+  - id: wa_preview_tone
+    parameters:
+      preset: int
+    then:
+      - lambda: |-
+          if (wake_alarm::tone_preview().begin(preset,millis(),id(wa_unacknowledged),wake_alarm::display_state().busy))
+            id(buzzer).play(wake_alarm::alarm_tone(preset));
+  - id: wa_stop_preview
+    then:
+      - lambda: |-
+          if (wake_alarm::tone_preview().stop() && !id(wa_unacknowledged)) id(buzzer).stop();
   - id: wa_apply_plan
     parameters:
       enabled: bool
@@ -298,6 +335,7 @@ script:
             lambda: 'return !id(wa_ringing);'
           then:
             - lambda: |-
+                if (wake_alarm::tone_preview().stop()) id(buzzer).stop();
                 id(wa_unacknowledged) = true;
                 id(wa_snooze_epoch) = 0;
                 id(wa_ringing) = true;
@@ -399,6 +437,11 @@ script:
 # A short interval + 15 min catchup ensures ordinary restarts around alarm time do not skip.
 # Independent of the HA automation/Blueprint loop.
 interval:
+  - interval: 100ms
+    then:
+      - lambda: |-
+          if (wake_alarm::tone_preview().tick(millis(),id(wa_unacknowledged),wake_alarm::display_state().busy))
+            id(buzzer).stop();
   - interval: 5s
     then:
       - lambda: |-
@@ -495,6 +538,20 @@ text_sensor:
       return {signature};
 
 button:
+  - platform: template
+    name: Alarm Clock Preview Selected Tone
+    on_press:
+      - lambda: |-
+          const auto selected=id(wa_preview_choice).active_index();
+          if (selected.has_value()) id(wa_preview_tone).execute(selected.value());
+  - platform: template
+    name: Alarm Clock Preview Configured Tone
+    on_press:
+      - lambda: id(wa_preview_tone).execute(id(wa_tone_preset));
+  - platform: template
+    name: Alarm Clock Stop Tone Preview
+    on_press:
+      - script.execute: wa_stop_preview
   - platform: template
     name: "Alarm Clock Test"
     on_press:

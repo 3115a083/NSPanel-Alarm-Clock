@@ -108,7 +108,7 @@ api:
               notice.action_enabled = action_enabled;
               if (!id(wa_unacknowledged)) {
                 wake_alarm::panel_controls().wake(millis());
-                if (preset && notice.sound_allowed) id(buzzer).play(wake_alarm::notice_tone(preset));
+                if (preset && notice.sound_allowed) { wake_alarm::tone_preview().stop(); id(buzzer).play(wake_alarm::notice_tone(preset)); }
               }
             }
     - action: alarm_clear_notice

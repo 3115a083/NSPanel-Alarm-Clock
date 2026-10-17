@@ -47,7 +47,8 @@ def schema_fixtures():
                     humidifier_entities=['humidifier.fixture'],agenda_calendars=['calendar.agenda'],
                     climate_control=True,humidifier_control=True,agenda_after_stop=120,
                     schedule_enabled=True,blackout_enabled=True,blackout_lights=["light.fixture"],alarm_left_short="custom",custom_left_short=[{"action":"light.toggle","target":{"entity_id":"light.fixture"}}],
-                    relay1_mode='after_stop',relay1_duration=300,relay1_conditions=['input_boolean.fixture'],relay2_mode='pulse',relay2_buzzer=True)
+                    relay1_mode='after_stop',relay1_duration=300,relay1_conditions=['input_boolean.fixture'],relay2_mode='pulse',relay2_buzzer=True,
+                    preview_request_helpers=['input_button.preview'],show_button_labels=False,label_left_short='Room lamp')
         inputs = BlueprintInputs(current, {'alias': 'Compile-only fixture', 'use_blueprint': {
             'path': 'fixture.yaml', 'input': {
                 **panel, **extra}}})
@@ -175,6 +176,19 @@ async def render_plan():
         render_discovery(hass)
         render_optional_pages(hass)
         render_effects(hass)
+        preview_branch=next(d for d in device_blueprint.data['actions'] if 'tone_preview' in str(d.get('if','')))
+        preview_guard=preview_branch['then'][0]['value_template']
+        current=dt_util.utcnow()
+        def press(at, previous='unknown'):
+            return SimpleNamespace(to_state=SimpleNamespace(entity_id='input_button.preview',state=at),
+                from_state=SimpleNamespace(state=previous))
+        values=dict(preview_request_helpers=['input_button.preview'],now=lambda:current,
+            trigger=press(current.isoformat()))
+        assert Template(preview_guard,hass).async_render(values)
+        for trigger in [press((current-timedelta(seconds=6)).isoformat()),
+                        press(current.isoformat(),current.isoformat()),press('unknown')]:
+            assert not Template(preview_guard,hass).async_render(dict(values,trigger=trigger))
+        print('Actual HA tone preview guard passed: fresh press only, stale/attribute-only/unknown rejected.')
         source = next(a['variables']['day_plans'] for a in blueprint.data['actions']
                       if 'day_plans' in a.get('variables', {}))
         current = datetime(2026,10,18,18,tzinfo=zone)
