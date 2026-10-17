@@ -10,7 +10,7 @@ esphome:
       - lambda: 'id(wa_ui_profile) = 2;'
   project:
     name: nspanel_alarm.clock
-    version: 0.3.0-dev
+    version: 0.3.1-dev
 esp32:
   board: esp32dev
   framework:
@@ -35,10 +35,10 @@ time:
   - platform: sntp
     id: time_provider
 uart:
-  id: tf_uart
-  tx_pin: GPIO16
-  rx_pin: GPIO17
-  baud_rate: 921600
+  - id: tf_uart
+    tx_pin: GPIO16
+    rx_pin: GPIO17
+    baud_rate: 921600
 switch:
   - platform: gpio
     id: display_power
@@ -68,13 +68,49 @@ binary_sensor:
     pin: {number: GPIO14, inverted: true}
     filters: [delayed_on_off: 30ms]
     on_press:
-      - script.execute: button_left_press_short
+      - lambda: |-
+          auto &ui = wake_alarm::panel_controls();
+          ui.consumed[0] = ui.dark || id(wa_ringing);
+          ui.wake(millis());
+          if (id(wa_ringing)) id(wa_do_snooze).execute();
+    on_multi_click:
+      - timing:
+          - ON for at least 800ms
+        then:
+          - lambda: |-
+              if (!wake_alarm::panel_controls().consumed[0])
+                id(wa_ui_input).execute("back");
+      - timing:
+          - ON for at most 799ms
+          - OFF for at least 50ms
+        then:
+          - lambda: |-
+              if (!wake_alarm::panel_controls().consumed[0])
+                id(wa_ui_input).execute("minus");
   - platform: gpio
     name: Right Button
     pin: {number: GPIO27, inverted: true}
     filters: [delayed_on_off: 30ms]
     on_press:
-      - script.execute: button_right_press_short
+      - lambda: |-
+          auto &ui = wake_alarm::panel_controls();
+          ui.consumed[1] = ui.dark || id(wa_unacknowledged);
+          ui.wake(millis());
+          if (id(wa_unacknowledged)) id(wa_do_stop).execute();
+    on_multi_click:
+      - timing:
+          - ON for at least 800ms
+        then:
+          - lambda: |-
+              if (!wake_alarm::panel_controls().consumed[1])
+                id(wa_ui_input).execute("forward");
+      - timing:
+          - ON for at most 799ms
+          - OFF for at least 50ms
+        then:
+          - lambda: |-
+              if (!wake_alarm::panel_controls().consumed[1])
+                id(wa_ui_input).execute("plus");
 script:
   # Shared core installs the local Snooze/Stop handlers on these hooks.
   - id: button_left_press_short

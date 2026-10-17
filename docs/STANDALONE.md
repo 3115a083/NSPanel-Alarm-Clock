@@ -3,6 +3,12 @@
 Status: experimental source profile, not a hardware-accepted release. Existing
 Easy installations do not switch to it when updating the alarm add-on.
 
+For the current touch/long-press controls, night screensaver, local alarm editor,
+12/24-hour setting and optional data pages, see [Controls and night mode](CONTROLS-AND-NIGHT.md).
+Those firmware features reuse the existing v2 TFT. Re-import the device Blueprint
+to expose its new settings. Its calendar wake range already exists separately
+from the new display calendar selection.
+
 ## What changes
 
 `nspanel_alarm_standalone.yaml` replaces the full Easy package on **one selected
@@ -68,12 +74,12 @@ three page requests, three seconds apart, and reported as
 Page changes reset the text/brightness cache and restore the clock locally.
 There is no HA-driven screensaver or competing Easy home-page constructor.
 
-`Alarm Clock Idle Brightness` sets idle backlight, including 0 for darkness.
-An LCD clock is not readable in the dark with its backlight off. Ringing sets
-100%, then Stop/Snooze restores idle brightness. Both physical buttons call local
-alarm scripts; they do not switch relays. Relay boot defaults are always OFF.
-Configurable gestures, relay event rules, weather/media/agenda pages, night
-schedules and custom tones remain separate future modules.
+`Alarm Clock Idle Brightness` sets the awake backlight. The night screensaver
+provides a separate dim clock or black mode after inactivity. An LCD clock is
+not readable in the dark with its backlight off. Ringing sets 100%, then ordinary
+inactivity resumes. Both physical buttons retain local alarm acknowledgement;
+long presses navigate otherwise. Relays start OFF and are not linked to buttons.
+Free button assignments, relay rules, media pages and custom tones remain future modules.
 
 Rendering pauses during OTA/TFT transfer. TFT upload is manual and rejected while
 an alarm is pending. It is a maintenance operation, not an alarm-safe background
@@ -81,7 +87,7 @@ update. Time still requires initial synchronization after cold power loss.
 
 ## Version and acceptance boundary
 
-Firmware identifies itself as `nspanel_alarm.clock` / `0.3.0-dev`, UI mode
+Firmware identifies itself as `nspanel_alarm.clock` / `0.3.1-dev`, UI mode
 `standalone_v1`, TFT page protocol v2 and discovery protocol `NSPALARM1`.
 The already generated HMI source is unchanged by this firmware profile. No
 compiled TFT release or immutable release URL is claimed. A future release must

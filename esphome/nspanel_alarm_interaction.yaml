@@ -1,0 +1,169 @@
+globals:
+  - {id: wa_twelve_hour, type: bool, restore_value: yes, initial_value: 'false'}
+  - {id: wa_night_mode, type: int, restore_value: yes, initial_value: '1'}
+  - {id: wa_night_timeout, type: int, restore_value: yes, initial_value: '30'}
+  - {id: wa_night_brightness, type: int, restore_value: yes, initial_value: '1'}
+  - {id: wa_prewake_minutes, type: int, restore_value: yes, initial_value: '0'}
+  - {id: wa_agenda_seconds, type: int, restore_value: yes, initial_value: '0'}
+
+uart:
+  - id: !extend tf_uart
+    debug:
+      direction: RX
+      dummy_receiver: false
+      after:
+        delimiter: [0xFF, 0xFF, 0xFF]
+      sequence:
+        - lambda: |-
+            if (!wake_alarm::display_state().ready || wake_alarm::display_state().busy) return;
+            const auto key = wake_alarm::panel_controls().touch(bytes, millis());
+            if (key[0]) id(wa_ui_input).execute(std::string(key));
+
+api:
+  actions:
+    - action: alarm_display_settings
+      variables:
+        expected_device: string
+        expected_mac: string
+        twelve_hour: bool
+        night_mode: int
+        timeout_seconds: int
+        night_brightness: int
+        awake_brightness: int
+        prewake_minutes: int
+        agenda_seconds: int
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) ||
+                night_mode < 0 || night_mode > 2 || timeout_seconds < 0 || timeout_seconds > 86400 ||
+                night_brightness < 0 || night_brightness > 10 || awake_brightness < 1 || awake_brightness > 100 ||
+                prewake_minutes < 0 || prewake_minutes > 60 || agenda_seconds < 0 || agenda_seconds > 3600) return;
+            id(wa_twelve_hour) = twelve_hour;
+            id(wa_night_mode) = night_mode;
+            id(wa_night_timeout) = timeout_seconds;
+            id(wa_night_brightness) = night_brightness;
+            id(wa_prewake_minutes) = prewake_minutes;
+            id(wa_agenda_seconds) = agenda_seconds;
+            if (id(wa_idle_brightness).state != awake_brightness) {
+              auto call = id(wa_idle_brightness).make_call();
+              call.set_value(awake_brightness);
+              call.perform();
+            }
+    - action: alarm_update_cards
+      variables:
+        expected_device: string
+        expected_mac: string
+        page_mask: int
+        weather: string
+        weather_detail: string
+        entity0: string
+        entity1: string
+        entity2: string
+        entity3: string
+        climate: string
+        climate_detail: string
+        humidity: string
+        humidity_detail: string
+        agenda: string
+        agenda_detail: string
+        agenda_valid: bool
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) ||
+                page_mask < 0 || page_mask > 127) return;
+            auto &ui = wake_alarm::panel_controls();
+            ui.pages = page_mask | 3;
+            const std::array<std::string, 12> values{weather, weather_detail, entity0, entity1, entity2, entity3,
+                climate, climate_detail, humidity, humidity_detail, agenda, agenda_detail};
+            for (size_t i = 0; i < values.size(); ++i) {
+              if (i >= 10 && !agenda_valid) continue;
+              ui.cards[i] = wake_alarm::safe_text(values[i]);
+            }
+            ui.cards_ms = millis();
+            ui.agenda_error = !agenda_valid;
+            if (!(ui.pages & (1 << int(ui.page)))) ui.page = wake_alarm::PanelPage::CLOCK;
+
+text_sensor:
+  - platform: template
+    name: Alarm Clock Current View
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: |-
+      static const char *names[] = {"Clock", "Alarm", "Weather", "Entities", "Thermostat", "Humidifier", "Calendar"};
+      const auto &ui = wake_alarm::panel_controls();
+      return {ui.dark ? "Night" : names[int(ui.page)]};
+  - platform: template
+    id: wa_ui_config_snapshot
+    name: Alarm Clock Local Edit
+    entity_category: diagnostic
+    update_interval: 10s
+    lambda: |-
+      char text[140];
+      snprintf(text, sizeof(text), "NSPUI1|%s|%lu|%lu|%d|%d|%d", get_mac_address().c_str(),
+          (unsigned long)id(wa_ui_revision), (unsigned long)id(wa_ui_ack),
+          id(wa_ui_edit_hour), id(wa_ui_edit_minute), id(wa_ui_edit_enabled) ? 1 : 0);
+      return {text};
+  - platform: template
+    name: Alarm Clock Night Active
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: 'return {wake_alarm::panel_controls().dark ? "night" : "awake"};'
+
+script:
+  - id: !extend wa_start
+    then:
+      - lambda: |-
+          wake_alarm::panel_controls().alarm_seen = true;
+          wake_alarm::panel_controls().wake(millis());
+  - id: !extend wa_do_stop
+    then:
+      - lambda: 'wake_alarm::panel_controls().stopped(millis());'
+  - id: wa_ui_event
+    mode: queued
+    max_runs: 4
+    parameters:
+      command: string
+    then:
+      - homeassistant.event:
+          event: esphome.nspanel_alarm
+          data:
+            command: !lambda return command;
+            device_name: !lambda return App.get_name();
+            mac: !lambda return get_mac_address();
+  - id: wa_ui_input
+    mode: queued
+    max_runs: 4
+    parameters:
+      key: string
+    then:
+      - lambda: |-
+          auto &ui = wake_alarm::panel_controls();
+          if (wake_alarm::display_state().busy) return;
+          ui.wake(millis());
+          // Local acknowledgement is always independent of HA and navigation.
+          if (id(wa_unacknowledged)) {
+            if (key == "action" || key == "next") id(wa_do_stop).execute();
+            else if (key == "prev" && id(wa_ringing)) id(wa_do_snooze).execute();
+            return;
+          }
+          if (ui.page == wake_alarm::PanelPage::ALARM && (key == "minus" || key == "plus"))
+            key = key == "plus" ? "next" : "prev";
+          const std::string action = ui.input(key, id(wa_hour), id(wa_minute), id(wa_enabled), millis());
+          if (action == "save") {
+            if (ui.draft_enabled && id(wa_weekmask) == 0) {
+              ui.notice = "Set weekdays in blueprint"; ui.notice_ms = millis(); return;
+            }
+            id(wa_hour) = ui.draft_hour;
+            id(wa_minute) = ui.draft_minute;
+            id(wa_enabled) = ui.draft_enabled;
+            id(wa_ui_edit_hour) = ui.draft_hour;
+            id(wa_ui_edit_minute) = ui.draft_minute;
+            id(wa_ui_edit_enabled) = ui.draft_enabled;
+            id(wa_ui_revision) = id(wa_ui_revision) >= 2147483646 ? 1 : id(wa_ui_revision) + 1;
+            ui.editing = false; ui.page = wake_alarm::PanelPage::CLOCK;
+            id(wa_ui_config_snapshot).update();
+            id(wa_ui_event).execute("schedule_changed");
+          } else if (!action.empty()) {
+            ui.notice = "Requested"; ui.notice_ms = millis();
+            id(wa_ui_event).execute(action);
+          }
