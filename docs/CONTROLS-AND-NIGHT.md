@@ -78,7 +78,9 @@ normal operation and during an unanswered alarm. Choices: none, Snooze, Stop,
 previous/next, editor, minus/plus or a custom Home Assistant action sequence.
 Default normal gestures are minus/plus and previous/next; alarm defaults are
 Snooze/Stop for both short and long. Navigation/editor actions are ignored while
-an alarm is unanswered. Custom actions (for example a room light) can run then.
+an alarm is unanswered. Custom actions (for example a room light) can run then. Delegate long action
+sequences to a separate HA script: this settings automation uses restart mode
+and can restart when selected helpers or entities change.
 Short gestures execute on release, long at 0.8 seconds, without a second short
 trigger. Holding **right for five seconds always stops** an unanswered alarm,
 regardless of its mapping, TFT or HA connectivity. This reserved emergency stop
@@ -135,5 +137,4 @@ navigation. Its working display is not proof these new interactions have passed
 hardware tests. Test night glow, first-touch consumption, coordinate orientation,
 swipes, long/short button separation, local edit/HA outage, AM/PM, Snooze/Stop
 and each explicitly enabled appliance control separately. No physical appliance
-is actuated by CI. Relay event rules, doorbell/security overlays, freely assigned
-button actions and Music Assistant remain separate modules.
+is actuated by CI. Relay event rules, doorbell/security overlays, Music Assistant remain separate modules.

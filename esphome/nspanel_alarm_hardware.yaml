@@ -71,7 +71,7 @@ binary_sensor:
     on_press:
       - lambda: |-
           auto &ui = wake_alarm::panel_controls();
-          ui.consumed[0] = ui.dark && !id(wa_unacknowledged);
+          ui.consumed[0] = ui.dark;
           ui.wake(millis());
     on_multi_click:
       - timing:
@@ -95,7 +95,7 @@ binary_sensor:
     on_press:
       - lambda: |-
           auto &ui = wake_alarm::panel_controls();
-          ui.consumed[1] = ui.dark && !id(wa_unacknowledged);
+          ui.consumed[1] = ui.dark;
           ui.wake(millis());
       - script.execute: wa_emergency_hold
     on_release:

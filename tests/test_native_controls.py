@@ -82,7 +82,7 @@ int main() {
   ui.night_mode=2; ui.tick(200001,false,false); assert(ui.dark);
   ui.alarm_seen=true; ui.agenda_after_stop_s=60;
   ui.stopped(200002); assert(ui.page==PanelPage::AGENDA && !ui.alarm_seen);
-  ui.tick(260001,false,false); assert(ui.page==PanelPage::AGENDA);
+  ui.tick(260001,false,false); assert(ui.page==PanelPage::AGENDA && !ui.dark);
   ui.tick(260002,false,false); assert(ui.page==PanelPage::CLOCK);
   ui.activity_ms=UINT32_MAX-10000; ui.tick(19998,false,false); assert(!ui.dark);
   ui.tick(20000,false,false); assert(ui.dark); // millis rollover.

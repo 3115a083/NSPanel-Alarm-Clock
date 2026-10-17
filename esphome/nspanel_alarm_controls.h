@@ -81,7 +81,7 @@ struct PanelControls {
     if (auto_agenda && uint32_t(now - agenda_started) >= uint32_t(agenda_after_stop_s) * 1000) {
       page = PanelPage::CLOCK; auto_agenda = false;
     }
-    dark = !ringing && !prewake && night_mode != 0 && timeout_s != 0 &&
+    dark = !ringing && !prewake && !auto_agenda && night_mode != 0 && timeout_s != 0 &&
            uint32_t(now - activity_ms) >= timeout_s * 1000;
     if (!notice.empty() && uint32_t(now - notice_ms) >= 4000) notice.clear();
   }

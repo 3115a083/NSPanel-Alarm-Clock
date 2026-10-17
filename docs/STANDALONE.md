@@ -77,9 +77,10 @@ There is no HA-driven screensaver or competing Easy home-page constructor.
 `Alarm Clock Idle Brightness` sets the awake backlight. The night screensaver
 provides a separate dim clock or black mode after inactivity. An LCD clock is
 not readable in the dark with its backlight off. Ringing sets 100%, then ordinary
-inactivity resumes. Both physical buttons retain local alarm acknowledgement;
-long presses navigate otherwise. Relays start OFF and are not linked to buttons.
-Free button assignments, relay rules, media pages and custom tones remain future modules.
+inactivity resumes. Physical short/long gestures have independent normal/alarm mappings in the device
+Blueprint, including explicit custom HA actions. A five-second right hold is
+reserved local Stop. Relays start OFF. Dedicated relay event rules, media pages
+and custom tones remain future modules.
 
 Rendering pauses during OTA/TFT transfer. TFT upload is manual and rejected while
 an alarm is pending. It is a maintenance operation, not an alarm-safe background

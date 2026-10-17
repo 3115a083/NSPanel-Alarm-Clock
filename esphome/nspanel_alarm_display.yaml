@@ -175,7 +175,7 @@ interval:
             footer = page == wake_alarm::PanelPage::CLIMATE || page == wake_alarm::PanelPage::HUMIDIFIER ? "Toggle / body - +" : "Swipe or hold keys";
           }
           if (!ui.notice.empty()) { view.text[0] = "Info"; view.text[2] = ui.notice; }
-          if (id(wa_unacknowledged)) footer = id(wa_ringing) ? "Snooze / Stop" : "Cancel snooze";
+          if (id(wa_unacknowledged)) footer = id(wa_ringing) ? "Stop alarm" : "Cancel snooze";
           view.text[6] = "";  // Footer drawn at explicit hit-target coordinates.
           const bool fresh = wake_alarm::clock_renderer().fresh;
           wake_alarm::clock_renderer().render(view, [](const char *name, const std::string &text) {
@@ -183,8 +183,8 @@ interval:
           });
           static std::string previous_footer;
           if (!ui.dark && (fresh || footer != previous_footer)) {
-            const char *left = page == wake_alarm::PanelPage::ALARM ? "-" : "<";
-            const char *right = page == wake_alarm::PanelPage::ALARM ? "+" : ">";
+            const char *left = id(wa_unacknowledged) ? (id(wa_ringing) ? "Snooze" : "") : page == wake_alarm::PanelPage::ALARM ? "-" : "<";
+            const char *right = id(wa_unacknowledged) ? "Stop" : page == wake_alarm::PanelPage::ALARM ? "+" : ">";
             id(disp1).send_command_printf("xstr 20,282,70,26,1,52857,0,1,1,1,\"%s\"", left);
             id(disp1).send_command_printf("xstr 100,282,280,26,1,52857,0,1,1,1,\"%s\"", footer.c_str());
             id(disp1).send_command_printf("xstr 390,282,70,26,1,52857,0,1,1,1,\"%s\"", right);
