@@ -1,5 +1,10 @@
 # Alarm settings blueprint
 
+For a single device selection instead of three sensor selections, use the new
+`nspanel_alarm_device.yaml` Blueprint with updated firmware. See
+[device discovery and standalone setup](STANDALONE.md). Existing automations keep
+their input schema. Disable the previous planner before enabling its replacement.
+
 The optional settings blueprint plans locally executed alarms. Keep the existing
 NSPanel Easy automation for its base settings/display handshake. Use one settings
 automation per panel and disable the legacy `wecker_schedule_sync` writer if it

@@ -21,6 +21,7 @@ time:
 esphome:
   includes:
     - nspanel_alarm_schedule_v2.h
+    - nspanel_alarm_identity.h
 
 preferences:
   # Restored globals poll every second; sync pending writes at the same cadence.
@@ -28,6 +29,10 @@ preferences:
   flash_write_interval: 1s
 
 globals:
+  - id: wa_ui_profile
+    type: int
+    restore_value: no
+    initial_value: '0'
   - id: wa_hour
     type: int
     restore_value: yes
@@ -100,39 +105,70 @@ api:
         epoch1: int
         source1: int
       then:
+        - script.execute:
+            id: wa_apply_plan
+            enabled: !lambda return enabled;
+            hour: !lambda return hour;
+            minute: !lambda return minute;
+            weekdays: !lambda return weekdays;
+            snooze_minutes: !lambda return snooze_minutes;
+            buzzer_grace_seconds: !lambda return buzzer_grace_seconds;
+            date0: !lambda return date0;
+            epoch0: !lambda return epoch0;
+            source0: !lambda return source0;
+            date1: !lambda return date1;
+            epoch1: !lambda return epoch1;
+            source1: !lambda return source1;
+    - action: alarm_apply_device_plan
+      variables:
+        expected_device: string
+        expected_mac: string
+        enabled: bool
+        hour: int
+        minute: int
+        weekdays: int
+        snooze_minutes: int
+        buzzer_grace_seconds: int
+        date0: int
+        epoch0: int
+        source0: int
+        date1: int
+        epoch1: int
+        source1: int
+      then:
+        - if:
+            condition:
+              lambda: |-
+                return wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address());
+            then:
+              - script.execute:
+                  id: wa_apply_plan
+                  enabled: !lambda return enabled;
+                  hour: !lambda return hour;
+                  minute: !lambda return minute;
+                  weekdays: !lambda return weekdays;
+                  snooze_minutes: !lambda return snooze_minutes;
+                  buzzer_grace_seconds: !lambda return buzzer_grace_seconds;
+                  date0: !lambda return date0;
+                  epoch0: !lambda return epoch0;
+                  source0: !lambda return source0;
+                  date1: !lambda return date1;
+                  epoch1: !lambda return epoch1;
+                  source1: !lambda return source1;
+            else:
+              - logger.log:
+                  level: ERROR
+                  tag: wake_alarm
+                  format: "Rejected alarm plan for another device"
+    - action: alarm_disable_device
+      variables:
+        expected_device: string
+        expected_mac: string
+      then:
         - lambda: |-
-            static_assert(NSPANEL_ALARM_SCHEDULE_API_VERSION == 2,
-                          "Outdated alarm header: remove local header copies and clean build files");
-            if (hour < 0 || hour > 23 || minute < 0 || minute > 59 ||
-                weekdays < 0 || weekdays > 127 || snooze_minutes < 1 ||
-                snooze_minutes > 60 || buzzer_grace_seconds < 0 ||
-                buzzer_grace_seconds > 120) return;
-            const auto now = id(time_provider).now();
-            const wake_alarm::DayPlan first{date0, epoch0, source0};
-            const wake_alarm::DayPlan second{date1, epoch1, source1};
-            // Clear-all is permitted without a trusted clock. Other changes
-            // require complete valid slots and a bounded near-term horizon.
-            const bool clear = date0 == 0 && epoch0 == 0 && source0 == 0 &&
-                               date1 == 0 && epoch1 == 0 && source1 == 0;
-            if (!clear && (!now.is_valid() || now.timestamp <= 1735689600 ||
-                !wake_alarm::valid_plan(first, now.timestamp) ||
-                !wake_alarm::valid_plan(second, now.timestamp) ||
-                (date0 != 0 && date0 == date1))) {
-              ESP_LOGE("wake_alarm", "Rejected invalid dated alarm plan");
-              return;
-            }
-            id(wa_plan_date0) = date0;
-            id(wa_plan_epoch0) = epoch0;
-            id(wa_plan_source0) = source0;
-            id(wa_plan_date1) = date1;
-            id(wa_plan_epoch1) = epoch1;
-            id(wa_plan_source1) = source1;
-            id(wa_hour) = hour;
-            id(wa_minute) = minute;
-            id(wa_weekmask) = weekdays;
-            id(wa_snooze_minutes) = snooze_minutes;
-            id(wa_buzzer_grace_s) = buzzer_grace_seconds;
-            id(wa_enabled) = enabled;  // Arm last, after the complete plan.
+            if (wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()))
+              id(wa_enabled) = false;
+            else ESP_LOGE("wake_alarm", "Rejected disable for another device");
     - action: alarm_configure
       variables:
         enabled: bool
@@ -171,6 +207,54 @@ api:
         - script.execute: wa_start
 
 script:
+  - id: wa_apply_plan
+    parameters:
+      enabled: bool
+      hour: int
+      minute: int
+      weekdays: int
+      snooze_minutes: int
+      buzzer_grace_seconds: int
+      date0: int
+      epoch0: int
+      source0: int
+      date1: int
+      epoch1: int
+      source1: int
+    then:
+      - lambda: |-
+          static_assert(NSPANEL_ALARM_SCHEDULE_API_VERSION == 2,
+                        "Outdated alarm header: remove local header copies and clean build files");
+          if (hour < 0 || hour > 23 || minute < 0 || minute > 59 ||
+              weekdays < 0 || weekdays > 127 || snooze_minutes < 1 ||
+              snooze_minutes > 60 || buzzer_grace_seconds < 0 ||
+              buzzer_grace_seconds > 120) return;
+          const auto now = id(time_provider).now();
+          const wake_alarm::DayPlan first{date0, epoch0, source0};
+          const wake_alarm::DayPlan second{date1, epoch1, source1};
+          // Clear-all is permitted without a trusted clock. Other changes
+          // require complete valid slots and a bounded near-term horizon.
+          const bool clear = date0 == 0 && epoch0 == 0 && source0 == 0 &&
+                             date1 == 0 && epoch1 == 0 && source1 == 0;
+          if (!clear && (!now.is_valid() || now.timestamp <= 1735689600 ||
+              !wake_alarm::valid_plan(first, now.timestamp) ||
+              !wake_alarm::valid_plan(second, now.timestamp) ||
+              (date0 != 0 && date0 == date1))) {
+            ESP_LOGE("wake_alarm", "Rejected invalid dated alarm plan");
+            return;
+          }
+          id(wa_plan_date0) = date0;
+          id(wa_plan_epoch0) = epoch0;
+          id(wa_plan_source0) = source0;
+          id(wa_plan_date1) = date1;
+          id(wa_plan_epoch1) = epoch1;
+          id(wa_plan_source1) = source1;
+          id(wa_hour) = hour;
+          id(wa_minute) = minute;
+          id(wa_weekmask) = weekdays;
+          id(wa_snooze_minutes) = snooze_minutes;
+          id(wa_buzzer_grace_s) = buzzer_grace_seconds;
+          id(wa_enabled) = enabled;  // Arm last, after the complete plan.
   - id: wa_start
     mode: single
     then:
@@ -324,6 +408,27 @@ binary_sensor:
     lambda: 'return id(wa_unacknowledged);'
 
 text_sensor:
+  - platform: template
+    name: "Alarm Clock UI Mode"
+    entity_category: diagnostic
+    update_interval: 10s
+    lambda: |-
+      return {id(wa_ui_profile) == 2 ? "standalone_v1" :
+              id(wa_ui_profile) == 1 ? "easy_clock_ui_v2" : "core_only_no_clock_ui"};
+  # Stable, device-scoped discovery contract; does not depend on entity names.
+  - platform: template
+    name: "Alarm Clock Device Snapshot"
+    entity_category: diagnostic
+    update_interval: 10s
+    lambda: |-
+      char value[256];
+      snprintf(value, sizeof(value), "NSPALARM1|%s|%s|%d:%d:%d:%d:%d:%d|%d:%lu:%d:%d:%lu:%d",
+          App.get_name().c_str(), get_mac_address().c_str(),
+          id(wa_enabled) ? 1 : 0, id(wa_weekmask), id(wa_hour), id(wa_minute),
+          id(wa_snooze_minutes), id(wa_buzzer_grace_s),
+          id(wa_plan_date0), (unsigned long)id(wa_plan_epoch0), id(wa_plan_source0),
+          id(wa_plan_date1), (unsigned long)id(wa_plan_epoch1), id(wa_plan_source1));
+      return {value};
   - platform: template
     name: "Alarm Clock Day Plan Signature"
     update_interval: 10s

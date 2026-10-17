@@ -16,26 +16,57 @@ ROOT = Path(__file__).resolve().parents[1]
 path = ROOT / 'homeassistant/blueprints/nspanel_alarm_settings.yaml'
 blueprint = Blueprint(load_yaml_dict(path), expected_domain='automation', schema=AUTOMATION_BLUEPRINT_SCHEMA)
 assert not blueprint.validate(), blueprint.validate()
+device_blueprint = Blueprint(load_yaml_dict(path.with_name('nspanel_alarm_device.yaml')),
+    expected_domain='automation', schema=AUTOMATION_BLUEPRINT_SCHEMA)
+assert not device_blueprint.validate(), device_blueprint.validate()
 fixtures = [
     {},
     {'app_entities': ['sensor.fixture_next_alarm'], 'calendars': ['calendar.fixture']},
     {'calendars': ['calendar.one', 'calendar.two'], 'weekdays': []},
 ]
 def schema_fixtures():
-    for extra in fixtures:
-        inputs = BlueprintInputs(blueprint, {'alias': 'Compile-only fixture', 'use_blueprint': {
+    for current in [blueprint, device_blueprint]:
+      for extra in fixtures:
+        panel = ({'panel_device':'0123456789abcdef0123456789abcdef'} if current is device_blueprint else {
+            'panel_name_entity':'sensor.fixture_device_name',
+            'config_signature':'sensor.fixture_config_signature',
+            'day_plan_signature':'sensor.fixture_day_plan_signature'})
+        if current is device_blueprint:
+            panel.update(enabled_helper='input_boolean.fixture_enabled',
+                time_helper='input_datetime.fixture_time',
+                app_enabled_helper='input_boolean.fixture_app_enabled',
+                app_time_helper='input_datetime.fixture_app_time',
+                calendar_enabled_helper='input_boolean.fixture_calendar_enabled')
+        inputs = BlueprintInputs(current, {'alias': 'Compile-only fixture', 'use_blueprint': {
             'path': 'fixture.yaml', 'input': {
-                'panel_name_entity': 'sensor.fixture_device_name',
-                'config_signature': 'sensor.fixture_config_signature',
-                'day_plan_signature': 'sensor.fixture_day_plan_signature', **extra}}})
+                **panel, **extra}}})
         inputs.validate()
         for key, value in inputs.inputs_with_default.items():
-            definition = blueprint.inputs[key]
+            definition = current.inputs[key]
             if definition and 'selector' in definition:
                 selector.selector(definition['selector'])(value)
         automation = inputs.async_substitute()
         PLATFORM_SCHEMA(automation)
-    print('Home Assistant 2026.10.1 blueprint metadata, selectors, substitution and automation/action schema passed (3 fixtures).')
+    print('Home Assistant 2026.10.1 metadata, selectors, substitution and automation/action schema passed (2 blueprints, 6 fixtures).')
+
+def render_discovery(hass):
+    # Real HA template engine; deterministic two-device registry adapters.
+    owners={'sensor.renamed':'a','sensor.other':'b'}
+    states={'sensor.renamed':'NSPALARM1|panel-a|aa0011223344|0:31:6:30:9:15|0:0:0:0:0:0',
+            'sensor.other':'NSPALARM1|panel-b|bb0011223344|0:31:7:30:9:15|0:0:0:0:0:0'}
+    for selected in ['a','b']:
+      for wrong in [False,True]:
+        values=dict(panel_device=selected,device_entities=lambda d:[e for e in owners if owners[e]==d],
+            integration_entities=lambda _:list(owners),states=lambda e:states[e],device_id=lambda e:owners[e],
+            device_attr=lambda d,_:[('mac','ff:00:11:22:33:44' if wrong else ('aa' if d=='a' else 'bb')+':00:11:22:33:44')])
+        actions=device_blueprint.data['actions']
+        values['snapshots']=Template(actions[0]['variables']['snapshots'],hass).async_render(values)
+        assert len(values['snapshots'])==1
+        for key,source in actions[2]['variables'].items():
+            values[key]=Template(source,hass).async_render(values)
+        rejected=Template(actions[3]['if'],hass).async_render(values)
+        assert rejected==wrong, (selected,wrong,rejected)
+    print('Actual HA device discovery/identity templates passed for two renamed devices and mismatched registry MACs.')
 
 async def render_plan():
     zone = ZoneInfo('Europe/Berlin')
@@ -45,6 +76,7 @@ async def render_plan():
         # cv.template needs the HA instance registered by its constructor,
         # not just an asyncio loop. No live integration or device is started.
         schema_fixtures()
+        render_discovery(hass)
         source = next(a['variables']['day_plans'] for a in blueprint.data['actions']
                       if 'day_plans' in a.get('variables', {}))
         current = datetime(2026,10,18,18,tzinfo=zone)

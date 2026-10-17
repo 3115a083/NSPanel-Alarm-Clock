@@ -17,8 +17,40 @@ class NativeClockUiTests(unittest.TestCase):
             source.write_text(r'''
 #include <cassert>
 #include "alarm_ui.h"
+#include "alarm_display_state.h"
+#include "nspanel_alarm_identity.h"
 int main() {
   using namespace wake_alarm;
+  assert(matches_identity("a", "aa0011223344", "a", "aa0011223344"));
+  assert(!matches_identity("a", "aa0011223344", "b", "bb0011223344"));
+  assert(!matches_identity("a", "aa0011223344", "a", "bb0011223344"));
+  assert(!matches_identity("", "", "", ""));
+  DisplayState state;
+  assert(!state.route(1, false));  // HA is irrelevant, display must be connected.
+  assert(state.route(1, true));
+  state.page();  // Stock/incorrect HMI responds without the v2 announcement.
+  assert(!state.route(2, true));
+  assert(state.route(3001, true));
+  state.page();
+  assert(state.route(6001, true));
+  state.page();
+  assert(!state.route(9001, true));  // No endless page loop on incompatible TFT.
+  assert(std::string(state.status(true)) == "incompatible_tft_or_no_ack");
+  state.announce();
+  assert(state.ready && !state.route(12000, true));
+  state.page();  // Screensaver or display page change; recover locally.
+  assert(!state.ready && state.route(12001, true));
+  state.announce();
+  state.busy = true;
+  assert(!state.route(15001, true));
+  assert(std::string(state.status(true)) == "uploading");
+  state.busy = false;
+  state.setup();
+  assert(!state.ready && state.brightness == -1 && state.route(15002, true));
+  state.page();
+  state.last_attempt = UINT32_MAX - 1000;
+  assert(!state.route(1000, true));
+  assert(state.route(2000, true));  // millis rollover.
   auto make = [](bool valid, bool enabled, int mask, bool ring, bool pending) {
     return clock_view(valid, 7, 5, 2026, 10, 15, enabled, 6, 30, mask, ring, pending);
   };

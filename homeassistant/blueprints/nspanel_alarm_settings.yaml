@@ -190,6 +190,13 @@ triggers:
   - trigger: state
     entity_id: !input calendars
 actions:
+  - if: >-
+      {{ device_id(panel_name_entity) is none or
+         device_id(config_signature) != device_id(panel_name_entity) or
+         device_id(day_plan_signature) != device_id(panel_name_entity) }}
+    then:
+      - stop: All three panel sensors must belong to the same registered device. No alarm action sent.
+        error: true
   - variables:
       panel_name: "{{ states(panel_name_entity) | trim }}"
       master: "{{ is_state(enabled_helper, 'on') }}"

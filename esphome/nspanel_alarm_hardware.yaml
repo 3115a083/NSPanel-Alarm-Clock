@@ -1,0 +1,88 @@
+# Original Sonoff NSPanel EU pin mapping, consistent with the reviewed Easy base.
+# Independent ESPHome hardware setup: no Easy external component, events or boot.
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  min_version: 2026.9.1
+  on_boot:
+    priority: -100
+    then:
+      - lambda: 'id(wa_ui_profile) = 2;'
+  project:
+    name: nspanel_alarm.clock
+    version: 0.3.0-dev
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+logger:
+wifi:
+  ssid: ${wifi_ssid}
+  password: ${wifi_password}
+  reboot_timeout: 0s
+api:
+  reboot_timeout: 0s
+ota:
+  - id: ota_std
+    platform: esphome
+    encryption: {}
+    on_begin:
+      - lambda: 'wake_alarm::display_state().busy = true;'
+    on_error:
+      - lambda: 'wake_alarm::display_state().busy = false;'
+safe_mode:
+time:
+  - platform: sntp
+    id: time_provider
+uart:
+  id: tf_uart
+  tx_pin: GPIO16
+  rx_pin: GPIO17
+  baud_rate: 921600
+switch:
+  - platform: gpio
+    id: display_power
+    internal: true
+    pin: {number: GPIO4, inverted: true}
+    restore_mode: ALWAYS_ON
+  - platform: gpio
+    id: relay_1
+    name: Relay 1
+    pin: GPIO22
+    restore_mode: ALWAYS_OFF
+  - platform: gpio
+    id: relay_2
+    name: Relay 2
+    pin: GPIO19
+    restore_mode: ALWAYS_OFF
+output:
+  - platform: ledc
+    id: buzzer_out
+    pin: GPIO21
+rtttl:
+  id: buzzer
+  output: buzzer_out
+binary_sensor:
+  - platform: gpio
+    name: Left Button
+    pin: {number: GPIO14, inverted: true}
+    filters: [delayed_on_off: 30ms]
+    on_press:
+      - script.execute: button_left_press_short
+  - platform: gpio
+    name: Right Button
+    pin: {number: GPIO27, inverted: true}
+    filters: [delayed_on_off: 30ms]
+    on_press:
+      - script.execute: button_right_press_short
+script:
+  # Shared core installs the local Snooze/Stop handlers on these hooks.
+  - id: button_left_press_short
+    then: []
+  - id: button_right_press_short
+    then: []
+  - id: button_right_press_long
+    then: []
+button:
+  - platform: restart
+    name: Restart

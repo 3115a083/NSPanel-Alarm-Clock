@@ -6,6 +6,10 @@ Home Assistant alarm-clock prototype for original Sonoff NSPanel EU/US (not Pro)
 
 ## What is implemented
 
+- Experimental [independent EU clock profile](docs/STANDALONE.md) with its own
+  local display/boot path and a device-selecting Blueprint. It is an explicit
+  alternative to the full Easy setup, not an automatic migration or TFT release.
+
 - Optional [settings blueprint](docs/BLUEPRINT.md) for a weekly alarm, dated app
   imports and calendar wake ranges. Requires updated alarm firmware and helper
   setup. Runtime integration is still awaiting device/HA acceptance.

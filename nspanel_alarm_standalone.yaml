@@ -1,0 +1,7 @@
+# Experimental EU-only replacement profile. Do NOT combine with the Easy package,
+# nspanel_alarm.yaml, nspanel_alarm_addon.yaml or nspanel_alarm_ui.yaml.
+# Uses the same tested alarm core and the project's protocol-v2 clock TFT.
+packages:
+  hardware: !include esphome/nspanel_alarm_hardware.yaml
+  alarm_core: !include esphome/nspanel_alarm_local.yaml
+  display: !include esphome/nspanel_alarm_display.yaml
