@@ -56,6 +56,8 @@ with tempfile.TemporaryDirectory(prefix='standalone-consumer-') as temp:
         assert heartbeat['optimistic'] is True, 'Temperature must publish changes immediately, not wait five minutes'
     switches={n.get('name'):n for n in merged['switch']}
     assert 'Display Settings from Blueprint' in switches and 'Sound - Notification' in switches
+    for name in ['Display Settings from Blueprint','Display Backlight','Sound - Notification']:
+        assert switches[name]['restore_mode']=='DISABLED', 'Derived switches must not execute OFF/ON actions during setup; globals own persistence'
     assert 'wa_notification_sound' in str(merged['api']['actions'])
     assert 'wa_notification_sound' not in str(next(n for n in merged['script'] if str(n['id'])=='wa_buzzer_loop'))
     assert 'external_components' not in merged and 'nspanel_easy' not in merged

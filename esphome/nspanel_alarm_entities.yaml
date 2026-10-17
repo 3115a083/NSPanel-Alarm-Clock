@@ -167,6 +167,7 @@ number:
 switch:
   - platform: template
     name: Display Settings from Blueprint
+    restore_mode: DISABLED
     entity_category: config
     lambda: |-
       return id(wa_display_from_blueprint);
@@ -177,6 +178,7 @@ switch:
       - globals.set: {id: wa_display_from_blueprint, value: 'false'}
   - platform: template
     name: Display Backlight
+    restore_mode: DISABLED
     lambda: |-
       const int target=wake_alarm::display_state().brightness;
       if (target<0) return {};
@@ -187,6 +189,7 @@ switch:
       - lambda: wake_alarm::panel_controls().manual_black=true;
   - platform: template
     name: Sound - Notification
+    restore_mode: DISABLED
     entity_category: config
     lambda: |-
       return id(wa_notification_sound);
