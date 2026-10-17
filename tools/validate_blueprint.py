@@ -41,7 +41,8 @@ def schema_fixtures():
                 panel.update(clock_format='12h',night_mode='black',weather_entities=['weather.fixture'],
                     display_entities=['sensor.fixture','light.fixture'],climate_entities=['climate.fixture'],
                     humidifier_entities=['humidifier.fixture'],agenda_calendars=['calendar.agenda'],
-                    climate_control=True,humidifier_control=True,agenda_after_stop=120)
+                    climate_control=True,humidifier_control=True,agenda_after_stop=120,
+                    alarm_left_short="custom",custom_left_short=[{"action":"light.toggle","target":{"entity_id":"light.fixture"}}])
         inputs = BlueprintInputs(current, {'alias': 'Compile-only fixture', 'use_blueprint': {
             'path': 'fixture.yaml', 'input': {
                 **panel, **extra}}})

@@ -55,9 +55,18 @@ dated alarms remain separate; editing the regular time does not turn a dated
 appointment into a repeated daily alarm.
 
 During an unanswered alarm, local Stop/Snooze takes priority over navigation.
-Right physical press immediately stops; left press snoozes a ringing alarm.
+Default short right stops after release; short left snoozes a ringing alarm.
 On-screen footer offers Snooze/Stop while ringing, Cancel snooze while snoozed.
-Holding a button after acknowledgement does not also navigate.
+The **Physical buttons** section independently maps left/right short/long in
+normal operation and during an unanswered alarm. Choices: none, Snooze, Stop,
+previous/next, editor, minus/plus or a custom Home Assistant action sequence.
+Default normal gestures are minus/plus and previous/next; alarm defaults are
+Snooze/Stop for both short and long. Navigation/editor actions are ignored while
+an alarm is unanswered. Custom actions (for example a room light) can run then.
+Short gestures execute on release, long at 0.8 seconds, without a second short
+trigger. Holding **right for five seconds always stops** an unanswered alarm,
+regardless of its mapping, TFT or HA connectivity. This reserved emergency stop
+cannot be remapped. Touch Snooze/Stop remains independent of button mappings.
 
 ## Local edit synchronization
 

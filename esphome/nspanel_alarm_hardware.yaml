@@ -64,53 +64,56 @@ rtttl:
   output: buzzer_out
 binary_sensor:
   - platform: gpio
+    id: wa_hw_left
     name: Left Button
     pin: {number: GPIO14, inverted: true}
     filters: [delayed_on_off: 30ms]
     on_press:
       - lambda: |-
           auto &ui = wake_alarm::panel_controls();
-          ui.consumed[0] = ui.dark || id(wa_ringing);
+          ui.consumed[0] = ui.dark && !id(wa_unacknowledged);
           ui.wake(millis());
-          if (id(wa_ringing)) id(wa_do_snooze).execute();
     on_multi_click:
       - timing:
           - ON for at least 800ms
         then:
           - lambda: |-
               if (!wake_alarm::panel_controls().consumed[0])
-                id(wa_ui_input).execute("back");
+                id(wa_button_dispatch).execute(2);
       - timing:
           - ON for at most 799ms
           - OFF for at least 50ms
         then:
           - lambda: |-
               if (!wake_alarm::panel_controls().consumed[0])
-                id(wa_ui_input).execute("minus");
+                id(wa_button_dispatch).execute(0);
   - platform: gpio
+    id: wa_hw_right
     name: Right Button
     pin: {number: GPIO27, inverted: true}
     filters: [delayed_on_off: 30ms]
     on_press:
       - lambda: |-
           auto &ui = wake_alarm::panel_controls();
-          ui.consumed[1] = ui.dark || id(wa_unacknowledged);
+          ui.consumed[1] = ui.dark && !id(wa_unacknowledged);
           ui.wake(millis());
-          if (id(wa_unacknowledged)) id(wa_do_stop).execute();
+      - script.execute: wa_emergency_hold
+    on_release:
+      - script.stop: wa_emergency_hold
     on_multi_click:
       - timing:
           - ON for at least 800ms
         then:
           - lambda: |-
               if (!wake_alarm::panel_controls().consumed[1])
-                id(wa_ui_input).execute("forward");
+                id(wa_button_dispatch).execute(3);
       - timing:
           - ON for at most 799ms
           - OFF for at least 50ms
         then:
           - lambda: |-
               if (!wake_alarm::panel_controls().consumed[1])
-                id(wa_ui_input).execute("plus");
+                id(wa_button_dispatch).execute(1);
 script:
   # Shared core installs the local Snooze/Stop handlers on these hooks.
   - id: button_left_press_short

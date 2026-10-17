@@ -1,4 +1,12 @@
 globals:
+  - {id: wa_button_normal_left_short, type: int, restore_value: yes, initial_value: '6'}
+  - {id: wa_button_normal_right_short, type: int, restore_value: yes, initial_value: '7'}
+  - {id: wa_button_normal_left_long, type: int, restore_value: yes, initial_value: '3'}
+  - {id: wa_button_normal_right_long, type: int, restore_value: yes, initial_value: '4'}
+  - {id: wa_button_alarm_left_short, type: int, restore_value: yes, initial_value: '1'}
+  - {id: wa_button_alarm_right_short, type: int, restore_value: yes, initial_value: '2'}
+  - {id: wa_button_alarm_left_long, type: int, restore_value: yes, initial_value: '1'}
+  - {id: wa_button_alarm_right_long, type: int, restore_value: yes, initial_value: '2'}
   - {id: wa_twelve_hour, type: bool, restore_value: yes, initial_value: 'false'}
   - {id: wa_night_mode, type: int, restore_value: yes, initial_value: '1'}
   - {id: wa_night_timeout, type: int, restore_value: yes, initial_value: '30'}
@@ -21,6 +29,31 @@ uart:
 
 api:
   actions:
+    - action: alarm_button_settings
+      variables:
+        expected_device: string
+        expected_mac: string
+        normal_left_short: int
+        normal_right_short: int
+        normal_left_long: int
+        normal_right_long: int
+        alarm_left_short: int
+        alarm_right_short: int
+        alarm_left_long: int
+        alarm_right_long: int
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address())) return;
+            const int values[] = {normal_left_short, normal_right_short, normal_left_long, normal_right_long, alarm_left_short, alarm_right_short, alarm_left_long, alarm_right_long};
+            for (int value : values) if (value < 0 || value > 8) return;
+            id(wa_button_normal_left_short) = normal_left_short;
+            id(wa_button_normal_right_short) = normal_right_short;
+            id(wa_button_normal_left_long) = normal_left_long;
+            id(wa_button_normal_right_long) = normal_right_long;
+            id(wa_button_alarm_left_short) = alarm_left_short;
+            id(wa_button_alarm_right_short) = alarm_right_short;
+            id(wa_button_alarm_left_long) = alarm_left_long;
+            id(wa_button_alarm_right_long) = alarm_right_long;
     - action: alarm_display_settings
       variables:
         expected_device: string
@@ -110,6 +143,39 @@ text_sensor:
     lambda: 'return {wake_alarm::panel_controls().dark ? "night" : "awake"};'
 
 script:
+  - id: wa_emergency_hold
+    mode: restart
+    then:
+      - delay: 5s
+      - if:
+          condition:
+            and:
+              - binary_sensor.is_on: wa_hw_right
+              - lambda: return id(wa_unacknowledged);
+          then:
+            - script.execute: wa_do_stop
+  - id: wa_button_dispatch
+    mode: queued
+    max_runs: 4
+    parameters:
+      gesture: int
+    then:
+      - lambda: |-
+          if (gesture < 0 || gesture > 3) return;
+          const int normal[] = {id(wa_button_normal_left_short), id(wa_button_normal_right_short), id(wa_button_normal_left_long), id(wa_button_normal_right_long)};
+          const int alarm[] = {id(wa_button_alarm_left_short), id(wa_button_alarm_right_short), id(wa_button_alarm_left_long), id(wa_button_alarm_right_long)};
+          const int action = id(wa_unacknowledged) ? alarm[gesture] : normal[gesture];
+          auto &ui = wake_alarm::panel_controls();
+          ui.wake(millis());
+          if (action == 1) { if (id(wa_ringing)) id(wa_do_snooze).execute(); }
+          else if (action == 2) { if (id(wa_unacknowledged)) id(wa_do_stop).execute(); }
+          else if (action == 8) {
+            static const char *events[] = {"button_left_short", "button_right_short", "button_left_long", "button_right_long"};
+            id(wa_ui_event).execute(events[gesture]);
+          } else if (!id(wa_unacknowledged)) {
+            static const char *keys[] = {"", "", "", "back", "forward", "edit", "minus", "plus"};
+            if (action >= 3 && action <= 7) id(wa_ui_input).execute(std::string(keys[action]));
+          }
   - id: !extend wa_start
     then:
       - lambda: |-

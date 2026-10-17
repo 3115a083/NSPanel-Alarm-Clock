@@ -57,3 +57,23 @@ class PanelBlueprintTests(unittest.TestCase):
         self.assertFalse(fields['humidifier_control']['default'])
         self.assertEqual(fields['agenda_calendars']['default'],[])
         self.assertIn('calendars',NEW['blueprint']['input']['calendar']['input'])
+
+    def test_button_mappings_cover_both_states_and_custom_sequences(self):
+        fields=NEW['blueprint']['input']['buttons']['input']
+        gestures=['left_short','right_short','left_long','right_long']
+        for state in ['normal','alarm']:
+            for gesture in gestures:
+                field=fields[state+'_'+gesture]
+                self.assertIn(field['default'],field['selector']['select']['options'])
+                self.assertIn('custom',field['selector']['select']['options'])
+        self.assertEqual(fields['alarm_left_short']['default'],'snooze')
+        self.assertEqual(fields['alarm_right_short']['default'],'stop')
+        for gesture in gestures:
+            self.assertEqual(fields['custom_'+gesture]['default'],[])
+        handler=next(d for d in walk(NEW['actions']) if isinstance(d.get('if'),str) and "trigger.id" in d['if'])
+        self.assertIn('snapshot[2]',handler['then'][0]['value_template'])
+        branches=handler['then'][2]['choose']
+        for gesture in gestures:
+            branch=next(b for b in branches if "button_"+gesture in b['conditions'])
+            self.assertTrue(render(branch['conditions'],dict(request='button_'+gesture)))
+            self.assertFalse(render(branch['conditions'],dict(request='schedule_changed')))

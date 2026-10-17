@@ -10,8 +10,7 @@ blueprint:
     Requires firmware with the NSPALARM1 device snapshot and device-bound actions.
     Helpers can be created in the UI or from alarm_clock_helpers.yaml.
     Includes local clock/screensaver settings and optional display-only data pages.
-    Thermostat/humidifier controls require explicit opt-in. It never controls relays
-    or uploads firmware/TFT and does not create helpers.
+    Thermostat/humidifier controls require explicit opt-in. Only explicitly configured custom button actions can control other targets. It never uploads firmware/TFT and does not create helpers.
   domain: automation
   source_url: https://github.com/3115a083/NSPanel-Alarm-Clock/blob/main/homeassistant/blueprints/nspanel_alarm_device.yaml
   homeassistant:
@@ -133,6 +132,63 @@ blueprint:
           default: false
           selector: {boolean: {}}
 
+    buttons:
+      name: Physical buttons (normal and alarm)
+      description: Short acts on release; long at 0.8 seconds. Right hold for 5 seconds always stops an alarm. Navigation/editor actions wait until alarm acknowledgement.
+      input:
+        normal_left_short:
+          name: Normal - left short
+          default: minus
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        normal_right_short:
+          name: Normal - right short
+          default: plus
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        normal_left_long:
+          name: Normal - left long
+          default: previous
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        normal_right_long:
+          name: Normal - right long
+          default: next
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        alarm_left_short:
+          name: Alarm - left short
+          default: snooze
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        alarm_right_short:
+          name: Alarm - right short
+          default: stop
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        alarm_left_long:
+          name: Alarm - left long
+          default: snooze
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        alarm_right_long:
+          name: Alarm - right long
+          default: stop
+          selector: {select: {options: [none, snooze, stop, previous, next, editor, minus, plus, custom]}}
+        custom_left_short:
+          name: Custom HA action - left short
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        custom_right_short:
+          name: Custom HA action - right short
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        custom_left_long:
+          name: Custom HA action - left long
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+        custom_right_long:
+          name: Custom HA action - right long
+          description: Runs only when the corresponding normal/alarm mapping is custom.
+          default: []
+          selector: {action: {}}
+
     display:
       name: Clock, screensaver and optional pages
       input:
@@ -201,6 +257,14 @@ blueprint:
 mode: restart
 max_exceeded: silent
 variables:
+  normal_left_short: !input normal_left_short
+  normal_right_short: !input normal_right_short
+  normal_left_long: !input normal_left_long
+  normal_right_long: !input normal_right_long
+  alarm_left_short: !input alarm_left_short
+  alarm_right_short: !input alarm_right_short
+  alarm_left_long: !input alarm_left_long
+  alarm_right_long: !input alarm_right_long
   panel_device: !input panel_device
   clock_format: !input clock_format
   night_mode: !input night_mode
@@ -389,6 +453,14 @@ actions:
       - variables:
           request: "{{ trigger.event.data.command | default('') }}"
       - choose:
+          - conditions: "{{ request == 'button_left_short' }}"
+            sequence: !input custom_left_short
+          - conditions: "{{ request == 'button_right_short' }}"
+            sequence: !input custom_right_short
+          - conditions: "{{ request == 'button_left_long' }}"
+            sequence: !input custom_left_long
+          - conditions: "{{ request == 'button_right_long' }}"
+            sequence: !input custom_right_long
           - conditions: "{{ request in ['climate_up','climate_down','climate_toggle'] and climate_control and climate_entities | length == 1 and states(climate_entities[0]) not in ['unknown','unavailable'] }}"
             sequence:
               - variables:
@@ -427,6 +499,22 @@ actions:
       - if: "{{ request != 'schedule_changed' }}"
         then:
           - stop: Explicit panel request handled or ignored. Values refresh from authoritative HA state.
+  - variables:
+      button_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_button_settings' }}"
+  - if: "{{ has_service('esphome', button_action.split('.')[1]) }}"
+    then:
+      - action: "{{ button_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          normal_left_short: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(normal_left_short) }}"
+          normal_right_short: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(normal_right_short) }}"
+          normal_left_long: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(normal_left_long) }}"
+          normal_right_long: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(normal_right_long) }}"
+          alarm_left_short: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(alarm_left_short) }}"
+          alarm_right_short: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(alarm_right_short) }}"
+          alarm_left_long: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(alarm_left_long) }}"
+          alarm_right_long: "{{ ['none','snooze','stop','previous','next','editor','minus','plus','custom'].index(alarm_right_long) }}"
   - variables:
       display_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_display_settings' }}"
       cards_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_update_cards' }}"

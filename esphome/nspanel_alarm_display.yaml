@@ -100,11 +100,12 @@ interval:
           const auto page = ui.dark ? wake_alarm::PanelPage::CLOCK : ui.page;
           const bool clock_page = page == wake_alarm::PanelPage::CLOCK;
           static int previous_style = -1;
-          const int style = int(page) + (ui.dark ? 16 : 0) + (ui.twelve ? 32 : 0);
+          const int style = int(page) + (ui.dark ? 16 : 0) + (ui.twelve ? 32 : 0) + (id(wa_ringing) ? 64 : 0);
           if (style != previous_style || wake_alarm::clock_renderer().fresh) {
             static const char *titles[] = {"ALARM CLOCK", "SET ALARM", "WEATHER", "ENTITIES", "THERMOSTAT", "HUMIDIFIER", "CALENDAR"};
-            id(disp1).set_component_text("wa_title", titles[int(page)]);
+            id(disp1).set_component_text("wa_title", id(wa_ringing) ? "ALARM" : titles[int(page)]);
             id(disp1).set_component_font("wa_state", 1);
+            id(disp1).send_command_printf("wa_state.pco=%d", id(wa_ringing) ? 63488 : 65535);
             id(disp1).set_component_font("wa_enabled", 1);
             id(disp1).set_component_font("wa_date", 1);
             id(disp1).set_component_font("wa_time", clock_page || page == wake_alarm::PanelPage::ALARM ? 6 : 2);
@@ -135,6 +136,7 @@ interval:
             view.text[3] = next.source == 1 ? "APP ALARM" : next.source == 2 ? "CALENDAR ALARM" : "NEXT ALARM";
             if (ui.twelve) view.text[3] += local.tm_hour < 12 ? " AM" : " PM";
           }
+          if (id(wa_ringing)) view.text[2] = "Tap Snooze or Stop below";
           if (id(wa_unacknowledged) && !id(wa_ringing)) {
             view.text[3] = "SNOOZE LEFT";
             view.text[4] = valid ? wake_alarm::remaining_seconds(id(wa_snooze_epoch), now.timestamp) : "--:--";
