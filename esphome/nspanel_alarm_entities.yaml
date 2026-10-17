@@ -1,0 +1,277 @@
+# Standalone hardware sensors and user-facing controls. No Easy display lifecycle.
+globals:
+  - {id: wa_display_from_blueprint, type: 'bool', restore_value: true, initial_value: 'true'}
+  - {id: wa_applying_display_settings, type: 'bool', restore_value: false, initial_value: 'false'}
+  - {id: wa_notification_sound, type: 'bool', restore_value: true, initial_value: 'true'}
+  - {id: wa_dim_brightness, type: 'int', restore_value: true, initial_value: '25'}
+  - {id: wa_dim_timeout, type: 'int', restore_value: true, initial_value: '0'}
+  - {id: wa_page_timeout, type: 'int', restore_value: true, initial_value: '0'}
+  - {id: wa_wakeup_page, type: 'int', restore_value: true, initial_value: '0'}
+  - {id: wa_blueprint_version, type: 'std::string', restore_value: false, initial_value: '"Not received"'}
+sensor:
+  - platform: adc
+    id: wa_ntc_voltage
+    pin: GPIO38
+    attenuation: 12db
+    samples: 16
+    update_interval: 1s
+    internal: true
+    filters:
+      - median: {window_size: 5, send_every: 1, send_first_at: 1}
+      - exponential_moving_average: {alpha: 0.2, send_every: 1, send_first_at: 1}
+      - delta: 0.002
+      - heartbeat: 5min
+  - platform: resistance
+    id: wa_ntc_resistance
+    sensor: wa_ntc_voltage
+    configuration: DOWNSTREAM
+    resistor: 11.2kOhm
+    internal: true
+  - platform: ntc
+    id: wa_ntc_raw
+    sensor: wa_ntc_resistance
+    internal: true
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25
+      reference_resistance: 10kOhm
+    on_value:
+      - component.update: wa_temperature
+  - platform: template
+    id: wa_temperature
+    name: Temperature
+    unit_of_measurement: °C
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 60s
+    lambda: |-
+      return id(wa_ntc_raw).state + id(wa_temperature_correction).state;
+    filters:
+      - delta: 0.05
+      - heartbeat: 5min
+  - platform: wifi_signal
+    name: WiFi Signal
+    entity_category: diagnostic
+    update_interval: 60s
+  - platform: uptime
+    name: Uptime
+    entity_category: diagnostic
+    update_interval: 60s
+  - platform: template
+    name: Display Brightness Target
+    entity_category: diagnostic
+    unit_of_measurement: '%'
+    accuracy_decimals: 0
+    update_interval: 2s
+    lambda: |-
+      return wake_alarm::display_state().brightness < 0 ? NAN : wake_alarm::display_state().brightness;
+    filters: [{delta: 1}]
+number:
+  - id: !extend wa_idle_brightness
+    unit_of_measurement: '%'
+    set_action:
+      - lambda: |-
+          if (!id(wa_applying_display_settings)) id(wa_display_from_blueprint)=false;
+  - platform: template
+    id: wa_temperature_correction
+    name: Temperature Correction
+    entity_category: config
+    unit_of_measurement: °C
+    min_value: -10
+    max_value: 10
+    step: 0.1
+    initial_value: 0
+    restore_value: true
+    optimistic: true
+    update_interval: never
+    on_value:
+      - component.update: wa_temperature
+  - platform: template
+    id: wa_number_wa_dim_brightness
+    name: Display Brightness Dimdown
+    entity_category: config
+    unit_of_measurement: '%'
+    min_value: 1
+    max_value: 100
+    step: 1
+    update_interval: 2s
+    lambda: |-
+      if (id(wa_number_wa_dim_brightness).has_state() && id(wa_number_wa_dim_brightness).state==id(wa_dim_brightness)) return {};
+      return id(wa_dim_brightness);
+    set_action:
+      - lambda: |-
+          id(wa_dim_brightness)=int(x);
+  - platform: template
+    id: wa_number_wa_night_brightness
+    name: Display Brightness Sleep
+    entity_category: config
+    unit_of_measurement: '%'
+    min_value: 0
+    max_value: 100
+    step: 1
+    update_interval: 2s
+    lambda: |-
+      if (id(wa_number_wa_night_brightness).has_state() && id(wa_number_wa_night_brightness).state==id(wa_night_brightness)) return {};
+      return id(wa_night_brightness);
+    set_action:
+      - lambda: |-
+          id(wa_night_brightness)=int(x);
+          id(wa_display_from_blueprint)=false;
+  - platform: template
+    id: wa_number_wa_dim_timeout
+    name: Timeout Dimming
+    entity_category: config
+    unit_of_measurement: 's'
+    min_value: 0
+    max_value: 86400
+    step: 1
+    update_interval: 2s
+    lambda: |-
+      if (id(wa_number_wa_dim_timeout).has_state() && id(wa_number_wa_dim_timeout).state==id(wa_dim_timeout)) return {};
+      return id(wa_dim_timeout);
+    set_action:
+      - lambda: |-
+          id(wa_dim_timeout)=int(x);
+  - platform: template
+    id: wa_number_wa_night_timeout
+    name: Timeout Sleep
+    entity_category: config
+    unit_of_measurement: 's'
+    min_value: 0
+    max_value: 86400
+    step: 1
+    update_interval: 2s
+    lambda: |-
+      if (id(wa_number_wa_night_timeout).has_state() && id(wa_number_wa_night_timeout).state==id(wa_night_timeout)) return {};
+      return id(wa_night_timeout);
+    set_action:
+      - lambda: |-
+          id(wa_night_timeout)=int(x);
+          id(wa_display_from_blueprint)=false;
+  - platform: template
+    id: wa_number_wa_page_timeout
+    name: Timeout Page
+    entity_category: config
+    unit_of_measurement: 's'
+    min_value: 0
+    max_value: 86400
+    step: 1
+    update_interval: 2s
+    lambda: |-
+      if (id(wa_number_wa_page_timeout).has_state() && id(wa_number_wa_page_timeout).state==id(wa_page_timeout)) return {};
+      return id(wa_page_timeout);
+    set_action:
+      - lambda: |-
+          id(wa_page_timeout)=int(x);
+switch:
+  - platform: template
+    name: Display Settings from Blueprint
+    entity_category: config
+    lambda: |-
+      return id(wa_display_from_blueprint);
+    turn_on_action:
+      - globals.set: {id: wa_display_from_blueprint, value: 'true'}
+      - script.execute: {id: wa_ui_event, command: settings_changed}
+    turn_off_action:
+      - globals.set: {id: wa_display_from_blueprint, value: 'false'}
+  - platform: template
+    name: Display Backlight
+    lambda: |-
+      return !wake_alarm::panel_controls().manual_black;
+    turn_on_action:
+      - lambda: wake_alarm::panel_controls().wake(millis());
+    turn_off_action:
+      - lambda: wake_alarm::panel_controls().manual_black=true;
+  - platform: template
+    name: Sound - Notification
+    entity_category: config
+    lambda: |-
+      return id(wa_notification_sound);
+    turn_on_action:
+      - globals.set: {id: wa_notification_sound, value: 'true'}
+    turn_off_action:
+      - globals.set: {id: wa_notification_sound, value: 'false'}
+binary_sensor:
+  - platform: status
+    name: Device Online
+    entity_category: diagnostic
+  - platform: template
+    name: Display Ready
+    entity_category: diagnostic
+    lambda: |-
+      return wake_alarm::display_state().ready && !wake_alarm::display_state().busy;
+  - platform: template
+    name: Notification Unread
+    lambda: |-
+      return wake_alarm::effects().notice.kind != 0;
+text_sensor:
+  - platform: template
+    name: Device Name
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      return {App.get_name()};
+  - platform: version
+    name: ESPHome Version
+    entity_category: diagnostic
+    hide_timestamp: true
+  - platform: template
+    name: Version - Firmware
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      return {"${alarm_project_version}"};
+  - platform: template
+    name: Version - Blueprint
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: |-
+      return {id(wa_blueprint_version)};
+  - platform: template
+    name: TFT Protocol
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: |-
+      return {wake_alarm::display_state().ready ? "Clock v2" : "Not confirmed"};
+  - platform: template
+    name: Display Model
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      return {"NSPanel EU"};
+  - platform: template
+    name: Baud rate
+    entity_category: diagnostic
+    update_interval: 60s
+    lambda: |-
+      return {std::to_string(id(tf_uart).get_baud_rate())};
+select:
+  - platform: template
+    name: Screensaver Mode
+    options: [Disabled, Dim clock, Black]
+    update_interval: 2s
+    lambda: |-
+      static const char *modes[]={"Disabled","Dim clock","Black"};
+      return {modes[id(wa_night_mode)]};
+    set_action:
+      - lambda: |-
+          id(wa_night_mode)=x=="Black" ? 2 : x=="Dim clock" ? 1 : 0;
+          id(wa_display_from_blueprint)=false;
+  - platform: template
+    name: Wake-up page
+    options: [Clock, Weather, Entities, Thermostat, Humidifier, Calendar]
+    update_interval: 2s
+    lambda: |-
+      return {wake_alarm::PanelControls::page_title(id(wa_wakeup_page))};
+    set_action:
+      - lambda: |-
+          for(int i=0;i<7;++i) if(i!=1 && x==wake_alarm::PanelControls::page_title(i)) id(wa_wakeup_page)=i;
+api:
+  actions:
+    - action: alarm_report_blueprint
+      variables: {expected_device: string, expected_mac: string, version: string}
+      then:
+        - lambda: |-
+            if (wake_alarm::matches_identity(expected_device,expected_mac,App.get_name(),get_mac_address()) && version=="0.3.4")
+              id(wa_blueprint_version)=version;

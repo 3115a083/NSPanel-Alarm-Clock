@@ -7,3 +7,4 @@ packages:
   display: !include esphome/nspanel_alarm_display.yaml
   interaction: !include esphome/nspanel_alarm_interaction.yaml
   effects: !include esphome/nspanel_alarm_effects.yaml
+  entities: !include esphome/nspanel_alarm_entities.yaml

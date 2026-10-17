@@ -10,6 +10,8 @@ blueprint:
     Requires firmware with the NSPALARM1 device snapshot and device-bound actions.
     Helpers can be created in the UI or from alarm_clock_helpers.yaml.
     Includes local clock/screensaver settings and optional display-only data pages.
+    Direct changes to device brightness/sleep controls select local ownership;
+    turn on Display Settings from Blueprint on the device to resume these settings.
     Thermostat/humidifier controls and local relay rules require explicit opt-in. Custom button actions can control explicitly configured other targets. It never uploads firmware/TFT and does not create helpers.
   domain: automation
   source_url: https://github.com/3115a083/NSPanel-Alarm-Clock/blob/main/homeassistant/blueprints/nspanel_alarm_device.yaml
@@ -730,6 +732,16 @@ actions:
           expected_mac: "{{ snapshot[2] }}"
           preset: "{{ ['wake','classic','gentle','signal'].index(alarm_tone) }}"
       - stop: Tone preview requested. No schedule, relay or display settings changed.
+  - variables:
+      report_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_report_blueprint' }}"
+  - if: "{{ has_service('esphome',report_action.split('.')[1]) }}"
+    then:
+      - action: "{{ report_action }}"
+        continue_on_error: true
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          version: '0.3.4'
   - variables:
       pages_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_page_settings' }}"
       labels_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_button_labels' }}"

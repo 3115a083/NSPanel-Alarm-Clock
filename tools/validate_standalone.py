@@ -38,6 +38,19 @@ with tempfile.TemporaryDirectory(prefix='standalone-consumer-') as temp:
     if result.returncode: print(result.stdout)
     result.check_returncode()
     merged=yaml.load(result.stdout,Loader=Loader)
+    numbers={n['name']:n for n in merged['number']}
+    assert all(n in numbers for n in ['Temperature Correction','Display Brightness Sleep',
+        'Display Brightness Dimdown','Timeout Dimming','Timeout Sleep','Timeout Page'])
+    sensors={n.get('name'):n for n in merged['sensor']}
+    assert sensors['Temperature']['device_class']=='temperature'
+    assert sensors['Temperature']['unit_of_measurement']=='°C'
+    assert sensors['Temperature']['accuracy_decimals']==1
+    adc=next(n for n in merged['sensor'] if str(n['id'])=='wa_ntc_voltage')
+    assert adc['pin']['number']==38 and adc['samples']==16
+    switches={n.get('name'):n for n in merged['switch']}
+    assert 'Display Settings from Blueprint' in switches and 'Sound - Notification' in switches
+    assert 'wa_notification_sound' in str(merged['api']['actions'])
+    assert 'wa_notification_sound' not in str(next(n for n in merged['script'] if str(n['id'])=='wa_buzzer_loop'))
     assert 'external_components' not in merged and 'nspanel_easy' not in merged
     assert len(merged['display'])==1 and merged['display'][0]['platform']=='nextion'
     assert merged['api']['reboot_timeout']=='0s' and merged['wifi']['reboot_timeout']=='0s'
