@@ -23,6 +23,7 @@ esphome:
     - nspanel_alarm_schedule_v2.h
     - nspanel_alarm_identity.h
     - nspanel_alarm_controls.h
+    - nspanel_alarm_effects_v1.h
 
 preferences:
   # Restored globals poll every second; sync pending writes at the same cadence.
@@ -30,6 +31,7 @@ preferences:
   flash_write_interval: 1s
 
 globals:
+  - {id: wa_tone_preset, type: int, restore_value: yes, initial_value: '0'}
   # A local edit is mirrored to HA helpers before accepting another HA plan.
   - {id: wa_ui_revision, type: uint32_t, restore_value: yes, initial_value: '0'}
   - {id: wa_ui_ack, type: uint32_t, restore_value: yes, initial_value: '0'}
@@ -94,6 +96,15 @@ globals:
 
 api:
   actions:
+    - action: alarm_tone_settings
+      variables:
+        expected_device: string
+        expected_mac: string
+        preset: int
+      then:
+        - lambda: |-
+            if (wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) && preset >= 0 && preset <= 3)
+              id(wa_tone_preset) = preset;
     - action: alarm_ack_ui
       variables:
         expected_device: string
@@ -309,7 +320,7 @@ script:
                 then:
                   - lambda: |-
                       // buzzer belongs to the unchanged NSPanel Easy hw_buzzer package.
-                      id(buzzer).play("Wake:d=8,o=6,b=175:c,p,c,p,g,p,g,p,a,p,g,p");
+                      id(buzzer).play(wake_alarm::alarm_tone(id(wa_tone_preset)));
                   - delay: 3s
                 else:
                   - delay: 1s

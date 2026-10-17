@@ -99,7 +99,11 @@ interval:
           const bool prewake = valid && id(wa_enabled) && next.epoch > now.timestamp && ui.prewake_minutes > 0 &&
               next.epoch - now.timestamp <= ui.prewake_minutes * 60;
           ui.tick(millis(), id(wa_ringing), prewake);
-          const int brightness = id(wa_ringing) ? 100 : ui.dark ?
+          auto &overlay = wake_alarm::effects().notice;
+          overlay.tick(millis());
+          const bool showing_notice = overlay.kind && !id(wa_unacknowledged);
+          if (showing_notice) ui.wake(millis());
+          const int brightness = id(wa_ringing) ? 100 : showing_notice ? overlay.brightness : ui.dark ?
               (ui.night_mode == 2 ? 0 : ui.night_brightness) : (int)id(wa_idle_brightness).state;
           if (brightness != state.brightness) {
             id(disp1).set_backlight_brightness(brightness / 100.0f);
@@ -108,16 +112,16 @@ interval:
           const auto page = ui.dark ? wake_alarm::PanelPage::CLOCK : ui.page;
           const bool clock_page = page == wake_alarm::PanelPage::CLOCK;
           static int previous_style = -1;
-          const int style = int(page) + (ui.dark ? 16 : 0) + (ui.twelve ? 32 : 0) + (id(wa_ringing) ? 64 : 0);
+          const int style = int(page) + (ui.dark ? 16 : 0) + (ui.twelve ? 32 : 0) + (id(wa_ringing) ? 64 : 0) + (showing_notice ? 128 : 0);
           if (style != previous_style || wake_alarm::clock_renderer().fresh) {
             static const char *titles[] = {"ALARM CLOCK", "SET ALARM", "WEATHER", "ENTITIES", "THERMOSTAT", "HUMIDIFIER", "CALENDAR"};
-            id(disp1).set_component_text("wa_title", id(wa_ringing) ? "ALARM" : titles[int(page)]);
+            id(disp1).set_component_text("wa_title", id(wa_ringing) ? "ALARM" : showing_notice ? "NOTIFICATION" : titles[int(page)]);
             id(disp1).set_component_font("wa_state", 1);
             id(disp1).send_command_printf("wa_state.pco=%d", id(wa_ringing) ? 63488 : 65535);
             id(disp1).set_component_font("wa_enabled", 1);
             id(disp1).set_component_font("wa_date", 1);
-            id(disp1).set_component_font("wa_time", clock_page || page == wake_alarm::PanelPage::ALARM ? 6 : 2);
-            id(disp1).set_component_font("wa_alarm", clock_page ? 5 : 1);
+            id(disp1).set_component_font("wa_time", !showing_notice && (clock_page || page == wake_alarm::PanelPage::ALARM) ? 6 : 2);
+            id(disp1).set_component_font("wa_alarm", clock_page && !showing_notice ? 5 : 1);
             for (const auto *name : {"wa_title", "wa_state", "wa_date", "wa_enabled", "wa_days"})
               id(disp1).send_command_printf("vis %s,%d", name,
                   !ui.dark || (ui.twelve && std::string(name) == "wa_date") ? 1 : 0);
@@ -176,6 +180,11 @@ interval:
           }
           if (!ui.notice.empty()) { view.text[0] = "Info"; view.text[2] = ui.notice; }
           if (id(wa_unacknowledged)) footer = id(wa_ringing) ? "Stop alarm" : "Cancel snooze";
+          if (showing_notice) {
+            view.text = {overlay.kind == 1 ? "Doorbell" : "Alert", overlay.title, overlay.message,
+                !overlay.action_enabled ? "" : overlay.confirming ? "Tap again within 5 seconds" : "Action needs confirmation", "", "", ""};
+            footer = !overlay.action_enabled ? "Dismiss" : overlay.confirming ? "Confirm action" : overlay.action_label;
+          }
           view.text[6] = "";  // Footer drawn at explicit hit-target coordinates.
           const bool fresh = wake_alarm::clock_renderer().fresh;
           wake_alarm::clock_renderer().render(view, [](const char *name, const std::string &text) {
@@ -183,8 +192,8 @@ interval:
           });
           static std::string previous_footer;
           if (!ui.dark && (fresh || footer != previous_footer)) {
-            const char *left = id(wa_unacknowledged) ? (id(wa_ringing) ? "Snooze" : "") : page == wake_alarm::PanelPage::ALARM ? "-" : "<";
-            const char *right = id(wa_unacknowledged) ? "Stop" : page == wake_alarm::PanelPage::ALARM ? "+" : ">";
+            const char *left = showing_notice ? "Dismiss" : id(wa_unacknowledged) ? (id(wa_ringing) ? "Snooze" : "") : page == wake_alarm::PanelPage::ALARM ? "-" : "<";
+            const char *right = showing_notice ? (overlay.action_enabled ? "Action" : "") : id(wa_unacknowledged) ? "Stop" : page == wake_alarm::PanelPage::ALARM ? "+" : ">";
             id(disp1).send_command_printf("xstr 20,282,70,26,1,52857,0,1,1,1,\"%s\"", left);
             id(disp1).send_command_printf("xstr 100,282,280,26,1,52857,0,1,1,1,\"%s\"", footer.c_str());
             id(disp1).send_command_printf("xstr 390,282,70,26,1,52857,0,1,1,1,\"%s\"", right);

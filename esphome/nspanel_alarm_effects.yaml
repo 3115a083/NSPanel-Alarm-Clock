@@ -1,0 +1,175 @@
+globals:
+  - {id: wa_r0_mode, type: int, restore_value: yes, initial_value: '0'}
+  - {id: wa_r0_delay_s, type: int, restore_value: yes, initial_value: '0'}
+  - {id: wa_r0_duration_s, type: int, restore_value: yes, initial_value: '2'}
+  - {id: wa_r0_max_on_s, type: int, restore_value: yes, initial_value: '3600'}
+  - {id: wa_r0_off_on_snooze, type: bool, restore_value: yes, initial_value: 'true'}
+  - {id: wa_r0_retrigger, type: bool, restore_value: yes, initial_value: 'true'}
+  - {id: wa_r0_require_gate, type: bool, restore_value: yes, initial_value: 'false'}
+  - {id: wa_r0_auxiliary_buzzer, type: bool, restore_value: yes, initial_value: 'false'}
+  - {id: wa_r1_mode, type: int, restore_value: yes, initial_value: '0'}
+  - {id: wa_r1_delay_s, type: int, restore_value: yes, initial_value: '0'}
+  - {id: wa_r1_duration_s, type: int, restore_value: yes, initial_value: '2'}
+  - {id: wa_r1_max_on_s, type: int, restore_value: yes, initial_value: '3600'}
+  - {id: wa_r1_off_on_snooze, type: bool, restore_value: yes, initial_value: 'true'}
+  - {id: wa_r1_retrigger, type: bool, restore_value: yes, initial_value: 'true'}
+  - {id: wa_r1_require_gate, type: bool, restore_value: yes, initial_value: 'false'}
+  - {id: wa_r1_auxiliary_buzzer, type: bool, restore_value: yes, initial_value: 'false'}
+esphome:
+  on_boot:
+    priority: -90
+    then:
+      - lambda: |-
+          auto &state = wake_alarm::effects();
+          state.relays[0].rule = wake_alarm::RelayRule{id(wa_r0_mode), id(wa_r0_delay_s), id(wa_r0_duration_s), id(wa_r0_max_on_s), id(wa_r0_off_on_snooze), id(wa_r0_retrigger), id(wa_r0_require_gate), id(wa_r0_auxiliary_buzzer)};
+          state.relays[1].rule = wake_alarm::RelayRule{id(wa_r1_mode), id(wa_r1_delay_s), id(wa_r1_duration_s), id(wa_r1_max_on_s), id(wa_r1_off_on_snooze), id(wa_r1_retrigger), id(wa_r1_require_gate), id(wa_r1_auxiliary_buzzer)};
+api:
+  actions:
+    - action: alarm_manual_relay
+      variables:
+        expected_device: string
+        expected_mac: string
+        relay: int
+        target_on: bool
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) || relay<1 || relay>2) return;
+            wake_alarm::effects().relays[relay-1].manual();
+            auto *output = relay == 1 ? id(relay_1) : id(relay_2);
+            if (target_on) output->turn_on(); else output->turn_off();
+    - action: alarm_relay_settings
+      variables:
+        expected_device: string
+        expected_mac: string
+        relay: int
+        mode: int
+        delay_s: int
+        duration_s: int
+        max_on_s: int
+        off_on_snooze: bool
+        retrigger: bool
+        require_gate: bool
+        auxiliary_buzzer: bool
+        gate_allowed: bool
+        gate_valid: bool
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()) || relay<1 || relay>2) return;
+            const wake_alarm::RelayRule rule{mode,delay_s,duration_s,max_on_s,off_on_snooze,retrigger,require_gate,auxiliary_buzzer};
+            if (!rule.valid()) return;
+            auto &state = wake_alarm::effects();
+            state.configure(relay-1,rule,[](int index,bool on){
+              auto *output = index == 0 ? id(relay_1) : id(relay_2);
+              if (on) output->turn_on(); else output->turn_off();
+            });
+            auto &selected = state.relays[relay-1];
+            selected.gate=gate_allowed; selected.gate_valid=gate_valid; selected.gate_ms=millis();
+            if (relay==1) {
+              id(wa_r0_mode) = mode;
+              id(wa_r0_delay_s) = delay_s;
+              id(wa_r0_duration_s) = duration_s;
+              id(wa_r0_max_on_s) = max_on_s;
+              id(wa_r0_off_on_snooze) = off_on_snooze;
+              id(wa_r0_retrigger) = retrigger;
+              id(wa_r0_require_gate) = require_gate;
+              id(wa_r0_auxiliary_buzzer) = auxiliary_buzzer;
+            }
+            if (relay==2) {
+              id(wa_r1_mode) = mode;
+              id(wa_r1_delay_s) = delay_s;
+              id(wa_r1_duration_s) = duration_s;
+              id(wa_r1_max_on_s) = max_on_s;
+              id(wa_r1_off_on_snooze) = off_on_snooze;
+              id(wa_r1_retrigger) = retrigger;
+              id(wa_r1_require_gate) = require_gate;
+              id(wa_r1_auxiliary_buzzer) = auxiliary_buzzer;
+            }
+    - action: alarm_show_notice
+      variables:
+        expected_device: string
+        expected_mac: string
+        kind: int
+        token: string
+        title: string
+        message: string
+        action_label: string
+        action_enabled: bool
+        ttl_seconds: int
+        preset: int
+        brightness: int
+        cooldown_seconds: int
+      then:
+        - lambda: |-
+            if (!wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address())) return;
+            auto &notice = wake_alarm::effects().notice;
+            if (notice.show(kind,token,wake_alarm::safe_text(title,30),wake_alarm::safe_text(message),
+                ttl_seconds,preset,brightness,cooldown_seconds,millis())) {
+              notice.action_label = wake_alarm::safe_text(action_label,20);
+              notice.action_enabled = action_enabled;
+              if (!id(wa_unacknowledged)) {
+                wake_alarm::panel_controls().wake(millis());
+                if (preset && notice.sound_allowed) id(buzzer).play(wake_alarm::notice_tone(preset));
+              }
+            }
+    - action: alarm_clear_notice
+      variables:
+        expected_device: string
+        expected_mac: string
+        kind: int
+        token: string
+      then:
+        - lambda: |-
+            if (wake_alarm::matches_identity(expected_device, expected_mac, App.get_name(), get_mac_address()))
+              wake_alarm::effects().notice.clear_if(kind,token);
+switch:
+  - id: !extend relay_1
+    on_turn_on:
+      - lambda: 'if (!wake_alarm::effects().writing) wake_alarm::effects().relays[0].manual();'
+    on_turn_off:
+      - lambda: 'if (!wake_alarm::effects().writing) wake_alarm::effects().relays[0].manual();'
+  - id: !extend relay_2
+    on_turn_on:
+      - lambda: 'if (!wake_alarm::effects().writing) wake_alarm::effects().relays[1].manual();'
+    on_turn_off:
+      - lambda: 'if (!wake_alarm::effects().writing) wake_alarm::effects().relays[1].manual();'
+interval:
+  # Local output deadlines, not HA/entity polling. At most two relay timers.
+  - interval: 100ms
+    then:
+      - lambda: |-
+          wake_alarm::effects().tick(millis(),id(wa_ringing),id(wa_unacknowledged),[](int index,bool on){
+            auto *output = index == 0 ? id(relay_1) : id(relay_2);
+            if (on) output->turn_on(); else output->turn_off();
+          }, {{id(relay_1).state,id(relay_2).state}});
+text_sensor:
+  - platform: template
+    name: Alarm Clock Notice Status
+    entity_category: diagnostic
+    update_interval: 5s
+    lambda: |-
+      const auto &notice = wake_alarm::effects().notice;
+      return {notice.kind == 0 ? "none" : notice.confirming ? "confirming" : notice.kind == 1 ? "doorbell" : "alert"};
+button:
+  - platform: template
+    name: Relay 1 Cancel Alarm Timer
+    entity_category: config
+    on_press:
+      - lambda: wake_alarm::effects().relays[0].manual();
+  - platform: template
+    name: Relay 2 Cancel Alarm Timer
+    entity_category: config
+    on_press:
+      - lambda: wake_alarm::effects().relays[1].manual();
+script:
+  - id: wa_notice_event
+    parameters:
+      command: string
+      token: string
+    then:
+      - homeassistant.event:
+          event: esphome.nspanel_alarm_notice
+          data:
+            command: !lambda return command;
+            token: !lambda return token;
+            device_name: !lambda return App.get_name();
+            mac: !lambda return get_mac_address();

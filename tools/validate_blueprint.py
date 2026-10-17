@@ -2,6 +2,7 @@
 from pathlib import Path
 import asyncio
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 import tempfile
 from zoneinfo import ZoneInfo
 from homeassistant.components.automation.config import AUTOMATION_BLUEPRINT_SCHEMA, PLATFORM_SCHEMA
@@ -19,6 +20,9 @@ assert not blueprint.validate(), blueprint.validate()
 device_blueprint = Blueprint(load_yaml_dict(path.with_name('nspanel_alarm_device.yaml')),
     expected_domain='automation', schema=AUTOMATION_BLUEPRINT_SCHEMA)
 assert not device_blueprint.validate(), device_blueprint.validate()
+events_blueprint = Blueprint(load_yaml_dict(path.with_name('nspanel_alarm_events.yaml')),
+    expected_domain='automation', schema=AUTOMATION_BLUEPRINT_SCHEMA)
+assert not events_blueprint.validate(), events_blueprint.validate()
 fixtures = [
     {},
     {'app_entities': ['sensor.fixture_next_alarm'], 'calendars': ['calendar.fixture']},
@@ -42,7 +46,8 @@ def schema_fixtures():
                     display_entities=['sensor.fixture','light.fixture'],climate_entities=['climate.fixture'],
                     humidifier_entities=['humidifier.fixture'],agenda_calendars=['calendar.agenda'],
                     climate_control=True,humidifier_control=True,agenda_after_stop=120,
-                    schedule_enabled=True,blackout_enabled=True,blackout_lights=["light.fixture"],alarm_left_short="custom",custom_left_short=[{"action":"light.toggle","target":{"entity_id":"light.fixture"}}])
+                    schedule_enabled=True,blackout_enabled=True,blackout_lights=["light.fixture"],alarm_left_short="custom",custom_left_short=[{"action":"light.toggle","target":{"entity_id":"light.fixture"}}],
+                    relay1_mode='after_stop',relay1_duration=300,relay1_conditions=['input_boolean.fixture'],relay2_mode='pulse',relay2_buzzer=True)
         inputs = BlueprintInputs(current, {'alias': 'Compile-only fixture', 'use_blueprint': {
             'path': 'fixture.yaml', 'input': {
                 **panel, **extra}}})
@@ -53,7 +58,51 @@ def schema_fixtures():
                 selector.selector(definition['selector'])(value)
         automation = inputs.async_substitute()
         PLATFORM_SCHEMA(automation)
-    print('Home Assistant 2026.10.1 metadata, selectors, substitution and automation/action schema passed (2 blueprints, 6 fixtures).')
+    for extra in [{}, {'door_sources':['binary_sensor.door']},
+                  {'door_sources':['binary_sensor.door'],'alert_sources':['alarm_control_panel.fixture'],
+                   'door_action':[{'action':'script.turn_on','target':{'entity_id':'script.fixture'}}],
+                   'alert_action':[{'action':'script.turn_on','target':{'entity_id':'script.other'}}]}]:
+        inputs=BlueprintInputs(events_blueprint, {'alias':'Event schema fixture','use_blueprint':{
+            'path':'events.yaml','input':{'panel_device':'0123456789abcdef0123456789abcdef',**extra}}})
+        inputs.validate()
+        for key,value in inputs.inputs_with_default.items():
+            definition=events_blueprint.inputs[key]
+            if definition and 'selector' in definition:
+                selector.selector(definition['selector'])(value)
+        PLATFORM_SCHEMA(inputs.async_substitute())
+    print('Home Assistant 2026.10.1 metadata, selectors, substitution and automation/action schema passed (3 blueprints, 9 fixtures).')
+
+def render_effects(hass):
+    def walk(value):
+        if isinstance(value,dict):
+            yield value
+            for child in value.values(): yield from walk(child)
+        elif isinstance(value,list):
+            for child in value: yield from walk(child)
+    for i,source in enumerate([d['variables']['relay_gate'] for d in walk(device_blueprint.data['actions'])
+                              if 'relay_gate' in d.get('variables',{})],1):
+        values={f'relay{i}_conditions':[],f'relay{i}_condition_mode':'all'}
+        assert Template(source,hass).async_render(values)=={'valid':True,'allowed':True}
+        hass.states.async_set('input_boolean.fixture','on')
+        values[f'relay{i}_conditions']=['input_boolean.fixture']
+        assert Template(source,hass).async_render(values)['allowed']
+        hass.states.async_set('input_boolean.fixture','unavailable')
+        assert not Template(source,hass).async_render(values)['valid']
+    hass.states.async_set('binary_sensor.door','on')
+    token=hass.states.get('binary_sensor.door').context.id
+    source=next(d['value_template'] for d in walk(events_blueprint.data['actions'])
+                if isinstance(d.get('value_template'),str) and "wait.trigger.id == 'confirmed'" in d['value_template'])
+    data=SimpleNamespace(device_name='fixture',mac='aa0011223344',command='door_action',token=token)
+    values=dict(snapshot=['NSPALARM1','fixture','aa0011223344','x','y'],source_kind='door',
+        notice_token=token,wait=SimpleNamespace(trigger=SimpleNamespace(id='confirmed',event=SimpleNamespace(data=data))))
+    assert Template(source,hass).async_render(values)
+    hass.states.async_set('binary_sensor.door','off')
+    assert Template(source,hass).async_render(values) # Doorbell pulse has ended; captured activation still valid.
+    data.token='stale'
+    assert not Template(source,hass).async_render(values)
+    data.token=token; data.mac='bb0011223344'
+    assert not Template(source,hass).async_render(values)
+    print('Actual HA relay gates and current-context event confirmation templates passed.')
 
 def render_discovery(hass):
     # Real HA template engine; deterministic two-device registry adapters.
@@ -119,6 +168,7 @@ async def render_plan():
         schema_fixtures()
         render_discovery(hass)
         render_optional_pages(hass)
+        render_effects(hass)
         source = next(a['variables']['day_plans'] for a in blueprint.data['actions']
                       if 'day_plans' in a.get('variables', {}))
         current = datetime(2026,10,18,18,tzinfo=zone)

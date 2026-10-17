@@ -1,0 +1,203 @@
+blueprint:
+  name: NSPanel Alarm Clock | Doorbell and Alert Screens
+  description: >-
+    Optional standalone module. Sources must be on or triggered. No door or alarm
+    action runs automatically. Two deliberate taps within five seconds confirm
+    the configured action. Dismiss/expiry only closes the screen. Wake alarm
+    acknowledgement has priority. Enable device HA actions for touch requests.
+  domain: automation
+  source_url: https://github.com/3115a083/NSPanel-Alarm-Clock/blob/main/homeassistant/blueprints/nspanel_alarm_events.yaml
+  homeassistant: {min_version: 2026.10.1}
+  input:
+    panel_device:
+      name: NSPanel device
+      selector: {device: {filter: {integration: esphome}}}
+    door_sources:
+      name: Doorbell source (zero or one binary sensor)
+      default: []
+      selector: {entity: {filter: {domain: binary_sensor}, multiple: true}}
+    alert_sources:
+      name: Alert source (zero or one)
+      default: []
+      selector: {entity: {filter: [{domain: binary_sensor}, {domain: alarm_control_panel}], multiple: true}}
+    door_message:
+      name: Doorbell message
+      default: Someone is at the door
+      selector: {text: {}}
+    alert_message:
+      name: Alert message
+      default: Check the selected alarm source
+      selector: {text: {}}
+    door_tone:
+      name: Doorbell tone
+      default: door
+      selector: {select: {options: [mute, door, beep, alert, soft]}}
+    alert_tone:
+      name: Alert tone
+      default: alert
+      selector: {select: {options: [mute, door, beep, alert, soft]}}
+    ttl_seconds:
+      name: Screen duration (seconds)
+      default: 30
+      selector: {number: {min: 5, max: 300, step: 1, mode: box}}
+    cooldown_seconds:
+      name: Cooldown per source (seconds)
+      default: 5
+      selector: {number: {min: 0, max: 300, step: 1, mode: box}}
+    brightness:
+      name: Event display brightness (%)
+      default: 25
+      selector: {number: {min: 1, max: 100, step: 1, mode: box}}
+    door_action_label:
+      name: Door action button label
+      default: Open door
+      selector: {text: {}}
+    alert_action_label:
+      name: Alert action button label
+      default: Cancel alarm
+      selector: {text: {}}
+    door_action:
+      name: Explicit confirmed door action
+      description: Configure an authorized action or script. Empty does nothing. No access codes on the display.
+      default: []
+      selector: {action: {}}
+    alert_action:
+      name: Explicit confirmed alert action
+      description: Configure an authorized action or script. Empty does nothing. Expiry never executes this.
+      default: []
+      selector: {action: {}}
+mode: parallel
+max: 4
+max_exceeded: silent
+variables:
+  door_action_label: !input door_action_label
+  alert_action_label: !input alert_action_label
+  door_actions: !input door_action
+  alert_actions: !input alert_action
+  panel_device: !input panel_device
+  door_sources: !input door_sources
+  alert_sources: !input alert_sources
+  door_message: !input door_message
+  alert_message: !input alert_message
+  door_tone: !input door_tone
+  alert_tone: !input alert_tone
+  ttl_seconds: !input ttl_seconds
+  cooldown_seconds: !input cooldown_seconds
+  brightness: !input brightness
+triggers:
+  - trigger: state
+    id: door
+    entity_id: !input door_sources
+    to: "on"
+  - trigger: state
+    id: alert
+    entity_id: !input alert_sources
+    to: "on"
+  - trigger: state
+    id: alert
+    entity_id: !input alert_sources
+    to: triggered
+  - trigger: homeassistant
+    id: startup
+    event: start
+  - trigger: event
+    id: startup
+    event_type: automation_reloaded
+actions:
+  - variables:
+      snapshots: >-
+        {% set ns = namespace(items=[]) %}
+        {% for entity in device_entities(panel_device) %}
+          {% if entity in integration_entities('esphome') and
+                states(entity).startswith('NSPALARM1|') %}
+            {% set ns.items = ns.items + [entity] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.items }}
+  - if: "{{ snapshots | length != 1 }}"
+    then:
+      - stop: Selected device must expose exactly one current Alarm Clock Device Snapshot. Update firmware or enable its diagnostic entity.
+        error: true
+  - variables:
+      snapshot_entity: "{{ snapshots[0] }}"
+      snapshot: "{{ states(snapshots[0]).split('|') }}"
+      registered_macs: >-
+        {% set ns = namespace(items=[]) %}
+        {% for connection in device_attr(panel_device, 'connections') or [] %}
+          {% if connection[0] == 'mac' %}
+            {% set ns.items = ns.items + [connection[1] | replace(':','') | replace('-','') | lower] %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.items }}
+  - if: >-
+      {{ snapshot | length != 5 or device_id(snapshot_entity) != panel_device or
+         not (snapshot[1] | regex_match('^[a-z][a-z0-9_-]{0,62}$')) or
+         not (snapshot[2] | regex_match('^[0-9a-fA-F]{12}$')) or
+         snapshot[2] | lower not in registered_macs or
+         not (snapshot[3] | regex_match('^[0-9]+(:[0-9]+){5}$')) or
+         not (snapshot[4] | regex_match('^[0-9]+(:[0-9]+){5}$')) }}
+    then:
+      - stop: Alarm Clock identity is incompatible or does not match the selected device. No alarm action sent.
+        error: true
+  - if: "{{ door_sources | length > 1 or alert_sources | length > 1 }}"
+    then:
+      - stop: Select at most one source per event kind.
+        error: true
+  - variables:
+      source_kind: >-
+        {% if trigger is defined and trigger.id | default('startup') in ['door','alert'] %}
+          {{ trigger.id }}
+        {% elif alert_sources | length == 1 and states(alert_sources[0]) in ['on','triggered'] %}alert
+        {% else %}door{% endif %}
+  - variables:
+      sources: "{{ door_sources if source_kind == 'door' else alert_sources }}"
+      kind: "{{ 1 if source_kind == 'door' else 2 }}"
+      show_action: "{{ 'esphome.' ~ snapshot[1] | replace('-','_') ~ '_alarm_show_notice' }}"
+  - condition: template
+    value_template: "{{ sources | length == 1 and states(sources[0]) in ['on','triggered'] and has_service('esphome',show_action.split('.')[1]) }}"
+  - variables:
+      notice_source: "{{ sources[0] }}"
+      notice_token: "{{ states[sources[0]].context.id }}"
+  - action: "{{ show_action }}"
+    data:
+      expected_device: "{{ snapshot[1] }}"
+      expected_mac: "{{ snapshot[2] }}"
+      kind: "{{ kind }}"
+      token: "{{ notice_token }}"
+      title: "{{ 'Doorbell' if source_kind == 'door' else 'Alarm' }}"
+      message: "{{ door_message if source_kind == 'door' else alert_message }}"
+      action_label: "{{ door_action_label if source_kind == 'door' else alert_action_label }}"
+      action_enabled: "{{ (door_actions if source_kind == 'door' else alert_actions) | length > 0 }}"
+      ttl_seconds: "{{ ttl_seconds | int }}"
+      preset: "{{ ['mute','door','beep','alert','soft'].index(door_tone if source_kind == 'door' else alert_tone) }}"
+      brightness: "{{ brightness | int }}"
+      cooldown_seconds: "{{ cooldown_seconds | int }}"
+  # Retain the activation token across a short doorbell pulse. No helpers required.
+  - wait_for_trigger:
+      - trigger: event
+        id: confirmed
+        event_type: esphome.nspanel_alarm_notice
+        event_data:
+          device_id: !input panel_device
+      - trigger: template
+        id: replaced
+        value_template: >-
+          {{ states(notice_source) in ['on','triggered'] and
+             states[notice_source].context.id != notice_token }}
+    timeout:
+      seconds: !input ttl_seconds
+    continue_on_timeout: false
+  - condition: template
+    value_template: >-
+      {{ wait.trigger.id == 'confirmed' and
+         wait.trigger.event.data.device_name | default('') == snapshot[1] and
+         wait.trigger.event.data.mac | default('') == snapshot[2] and
+         wait.trigger.event.data.token | default('') == notice_token and
+         wait.trigger.event.data.command | default('') == source_kind ~ '_action' }}
+  - choose:
+      - conditions: "{{ source_kind == 'door' }}"
+        sequence: !input door_action
+      - conditions: >-
+          {{ source_kind == 'alert' and states(notice_source) in ['on','triggered'] and
+             states[notice_source].context.id == notice_token }}
+        sequence: !input alert_action

@@ -10,7 +10,7 @@ esphome:
       - lambda: 'id(wa_ui_profile) = 2;'
   project:
     name: nspanel_alarm.clock
-    version: 0.3.1-dev
+    version: 0.3.2-dev
 esp32:
   board: esp32dev
   framework:

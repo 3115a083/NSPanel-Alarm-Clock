@@ -137,4 +137,5 @@ navigation. Its working display is not proof these new interactions have passed
 hardware tests. Test night glow, first-touch consumption, coordinate orientation,
 swipes, long/short button separation, local edit/HA outage, AM/PM, Snooze/Stop
 and each explicitly enabled appliance control separately. No physical appliance
-is actuated by CI. Relay event rules, doorbell/security overlays, Music Assistant remain separate modules.
+is actuated by CI. [Relay rules and doorbell/security overlays](RELAYS-AND-EVENTS.md) now have a separate
+module. Music Assistant remains later work.
