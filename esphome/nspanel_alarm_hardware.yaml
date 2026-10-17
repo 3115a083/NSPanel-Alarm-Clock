@@ -10,7 +10,7 @@ esphome:
       - lambda: 'id(wa_ui_profile) = 2;'
   project:
     name: nspanel_alarm.clock
-    version: 0.3.1-dev
+    version: 0.3.2-dev
 esp32:
   board: esp32dev
   framework:
@@ -27,7 +27,12 @@ ota:
     platform: esphome
     encryption: {}
     on_begin:
-      - lambda: 'wake_alarm::display_state().busy = true;'
+      - lambda: |-
+          wake_alarm::effects().release_all([](int index,bool on){
+            auto *output = index == 0 ? id(relay_1) : id(relay_2);
+            if (on) output->turn_on(); else output->turn_off();
+          });
+          wake_alarm::display_state().busy = true;
     on_error:
       - lambda: 'wake_alarm::display_state().busy = false;'
 safe_mode:

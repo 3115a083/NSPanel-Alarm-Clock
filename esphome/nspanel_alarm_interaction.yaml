@@ -242,6 +242,16 @@ script:
           auto &ui = wake_alarm::panel_controls();
           if (wake_alarm::display_state().busy) return;
           ui.wake(millis());
+          auto &notice = wake_alarm::effects().notice;
+          if (notice.kind && !id(wa_unacknowledged)) {
+            if (key == "prev" || (!notice.action_enabled && (key == "action" || key == "next"))) notice.clear();
+            else if (key == "action" || key == "next") {
+              const int kind = notice.kind;
+              const std::string token = notice.token;
+              if (notice.action(millis())) id(wa_notice_event).execute(kind == 1 ? "door_action" : "alert_action",token);
+            }
+            return;
+          }
           // Local acknowledgement is always independent of HA and navigation.
           if (id(wa_unacknowledged)) {
             if (key == "action" || key == "next") id(wa_do_stop).execute();

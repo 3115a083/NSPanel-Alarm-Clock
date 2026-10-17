@@ -79,8 +79,8 @@ provides a separate dim clock or black mode after inactivity. An LCD clock is
 not readable in the dark with its backlight off. Ringing sets 100%, then ordinary
 inactivity resumes. Physical short/long gestures have independent normal/alarm mappings in the device
 Blueprint, including explicit custom HA actions. A five-second right hold is
-reserved local Stop. Relays start OFF. Dedicated relay event rules, media pages
-and custom tones remain future modules.
+reserved local Stop. Relays start OFF. Local alarm relay rules, tone presets and optional door/alert screens are documented
+in [Relays and events](RELAYS-AND-EVENTS.md). A Music Assistant/media page remains future work.
 
 Rendering pauses during OTA/TFT transfer. TFT upload is manual and rejected while
 an alarm is pending. It is a maintenance operation, not an alarm-safe background
@@ -88,7 +88,7 @@ update. Time still requires initial synchronization after cold power loss.
 
 ## Version and acceptance boundary
 
-Firmware identifies itself as `nspanel_alarm.clock` / `0.3.1-dev`, UI mode
+Firmware identifies itself as `nspanel_alarm.clock` / `0.3.2-dev`, UI mode
 `standalone_v1`, TFT page protocol v2 and discovery protocol `NSPALARM1`.
 The already generated HMI source is unchanged by this firmware profile. No
 compiled TFT release or immutable release URL is claimed. A future release must

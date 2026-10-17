@@ -10,7 +10,7 @@ blueprint:
     Requires firmware with the NSPALARM1 device snapshot and device-bound actions.
     Helpers can be created in the UI or from alarm_clock_helpers.yaml.
     Includes local clock/screensaver settings and optional display-only data pages.
-    Thermostat/humidifier controls require explicit opt-in. Only explicitly configured custom button actions can control other targets. It never uploads firmware/TFT and does not create helpers.
+    Thermostat/humidifier controls and local relay rules require explicit opt-in. Custom button actions can control explicitly configured other targets. It never uploads firmware/TFT and does not create helpers.
   domain: automation
   source_url: https://github.com/3115a083/NSPanel-Alarm-Clock/blob/main/homeassistant/blueprints/nspanel_alarm_device.yaml
   homeassistant:
@@ -131,6 +131,91 @@ blueprint:
           name: Allow calendar alarms on unselected weekdays
           default: false
           selector: {boolean: {}}
+
+    outputs:
+      name: Alarm tone and local relay rules
+      description: Standalone relay rules are opt-in. Test alarms also trigger them. Manual switching cancels an owned timer. A reboot starts both relays OFF.
+      input:
+        alarm_tone:
+          name: Mandatory local alarm tone
+          default: wake
+          selector: {select: {options: [wake, classic, gentle, signal]}}
+        relay1_mode:
+          name: Relay 1 - alarm behavior
+          default: 'off'
+          selector: {select: {options: ['off', pulse, until_stop, latch, after_stop]}}
+        relay1_delay:
+          name: Relay 1 - delay before switching on (seconds)
+          default: 0
+          selector: {number: {min: 0, max: 600, step: 1, mode: box}}
+        relay1_duration:
+          name: Relay 1 - pulse duration or after-Stop duration (seconds)
+          default: 2
+          selector: {number: {min: 1, max: 3600, step: 1, mode: box}}
+        relay1_max_on:
+          name: Relay 1 - maximum automatic on time (seconds)
+          description: Applies to every mode, including latch. Auxiliary buzzer is additionally capped at 60 seconds. Manual operation has no alarm timer.
+          default: 3600
+          selector: {number: {min: 1, max: 86400, step: 1, mode: box}}
+        relay1_buzzer:
+          name: Relay 1 - connected load is an auxiliary buzzer
+          default: false
+          selector: {boolean: {}}
+        relay1_snooze_off:
+          name: Relay 1 - switch off on Snooze
+          default: true
+          selector: {boolean: {}}
+        relay1_resume:
+          name: Relay 1 - trigger again when Snooze ends
+          default: true
+          selector: {boolean: {}}
+        relay1_conditions:
+          name: Relay 1 - optional on/off conditions (up to four)
+          description: Evaluated at alarm start and before a delayed switch-on. Unknown/unavailable/stale denies a new switch-on. Empty means no HA condition.
+          default: []
+          selector: {entity: {filter: [{domain: binary_sensor}, {domain: input_boolean}, {domain: light}, {domain: switch}], multiple: true}}
+        relay1_condition_mode:
+          name: Relay 1 - combine conditions
+          default: all
+          selector: {select: {options: [all, any]}}
+        relay2_mode:
+          name: Relay 2 - alarm behavior
+          default: 'off'
+          selector: {select: {options: ['off', pulse, until_stop, latch, after_stop]}}
+        relay2_delay:
+          name: Relay 2 - delay before switching on (seconds)
+          default: 0
+          selector: {number: {min: 0, max: 600, step: 1, mode: box}}
+        relay2_duration:
+          name: Relay 2 - pulse duration or after-Stop duration (seconds)
+          default: 2
+          selector: {number: {min: 1, max: 3600, step: 1, mode: box}}
+        relay2_max_on:
+          name: Relay 2 - maximum automatic on time (seconds)
+          description: Applies to every mode, including latch. Auxiliary buzzer is additionally capped at 60 seconds. Manual operation has no alarm timer.
+          default: 3600
+          selector: {number: {min: 1, max: 86400, step: 1, mode: box}}
+        relay2_buzzer:
+          name: Relay 2 - connected load is an auxiliary buzzer
+          default: false
+          selector: {boolean: {}}
+        relay2_snooze_off:
+          name: Relay 2 - switch off on Snooze
+          default: true
+          selector: {boolean: {}}
+        relay2_resume:
+          name: Relay 2 - trigger again when Snooze ends
+          default: true
+          selector: {boolean: {}}
+        relay2_conditions:
+          name: Relay 2 - optional on/off conditions (up to four)
+          description: Evaluated at alarm start and before a delayed switch-on. Unknown/unavailable/stale denies a new switch-on. Empty means no HA condition.
+          default: []
+          selector: {entity: {filter: [{domain: binary_sensor}, {domain: input_boolean}, {domain: light}, {domain: switch}], multiple: true}}
+        relay2_condition_mode:
+          name: Relay 2 - combine conditions
+          default: all
+          selector: {select: {options: [all, any]}}
 
     buttons:
       name: Physical buttons (normal and alarm)
@@ -287,6 +372,25 @@ blueprint:
 mode: restart
 max_exceeded: silent
 variables:
+  alarm_tone: !input alarm_tone
+  relay1_mode: !input relay1_mode
+  relay1_delay: !input relay1_delay
+  relay1_duration: !input relay1_duration
+  relay1_max_on: !input relay1_max_on
+  relay1_buzzer: !input relay1_buzzer
+  relay1_snooze_off: !input relay1_snooze_off
+  relay1_resume: !input relay1_resume
+  relay1_conditions: !input relay1_conditions
+  relay1_condition_mode: !input relay1_condition_mode
+  relay2_mode: !input relay2_mode
+  relay2_delay: !input relay2_delay
+  relay2_duration: !input relay2_duration
+  relay2_max_on: !input relay2_max_on
+  relay2_buzzer: !input relay2_buzzer
+  relay2_snooze_off: !input relay2_snooze_off
+  relay2_resume: !input relay2_resume
+  relay2_conditions: !input relay2_conditions
+  relay2_condition_mode: !input relay2_condition_mode
   schedule_enabled: !input schedule_enabled
   schedule_start: !input schedule_start
   schedule_end: !input schedule_end
@@ -336,6 +440,10 @@ variables:
   calendar_mode: !input calendar_mode
   calendar_free_days: !input calendar_free_days
 triggers:
+  - trigger: state
+    entity_id: !input relay1_conditions
+  - trigger: state
+    entity_id: !input relay2_conditions
   - trigger: state
     entity_id: !input blackout_lights
   - trigger: event
@@ -538,6 +646,74 @@ actions:
       - if: "{{ request != 'schedule_changed' }}"
         then:
           - stop: Explicit panel request handled or ignored. Values refresh from authoritative HA state.
+  - variables:
+      tone_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_tone_settings' }}"
+      relay_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_relay_settings' }}"
+  - if: "{{ has_service('esphome', tone_action.split('.')[1]) }}"
+    then:
+      - action: "{{ tone_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          preset: "{{ ['wake','classic','gentle','signal'].index(alarm_tone) }}"
+  - if: "{{ relay1_conditions | length > 4 }}"
+    then:
+      - stop: Select at most four relay conditions.
+        error: true
+  - if: "{{ has_service('esphome', relay_action.split('.')[1]) }}"
+    then:
+      - variables:
+          relay_gate: >-
+            {% set ns = namespace(valid=true,on=0) %}
+            {% for entity in relay1_conditions %}
+              {% if states(entity) not in ['on','off'] %}{% set ns.valid=false %}{% endif %}
+              {% if is_state(entity,'on') %}{% set ns.on=ns.on+1 %}{% endif %}
+            {% endfor %}
+            {{ {'valid':ns.valid,'allowed':ns.valid and (not relay1_conditions or (ns.on == relay1_conditions | length if relay1_condition_mode == 'all' else ns.on > 0))} }}
+      - action: "{{ relay_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          relay: 1
+          mode: "{{ ['off','pulse','until_stop','latch','after_stop'].index(relay1_mode) }}"
+          delay_s: "{{ relay1_delay | int }}"
+          duration_s: "{{ relay1_duration | int }}"
+          max_on_s: "{{ relay1_max_on | int }}"
+          off_on_snooze: "{{ relay1_snooze_off }}"
+          retrigger: "{{ relay1_resume }}"
+          require_gate: "{{ relay1_conditions | length > 0 }}"
+          auxiliary_buzzer: "{{ relay1_buzzer }}"
+          gate_allowed: "{{ relay_gate.allowed }}"
+          gate_valid: "{{ relay_gate.valid }}"
+  - if: "{{ relay2_conditions | length > 4 }}"
+    then:
+      - stop: Select at most four relay conditions.
+        error: true
+  - if: "{{ has_service('esphome', relay_action.split('.')[1]) }}"
+    then:
+      - variables:
+          relay_gate: >-
+            {% set ns = namespace(valid=true,on=0) %}
+            {% for entity in relay2_conditions %}
+              {% if states(entity) not in ['on','off'] %}{% set ns.valid=false %}{% endif %}
+              {% if is_state(entity,'on') %}{% set ns.on=ns.on+1 %}{% endif %}
+            {% endfor %}
+            {{ {'valid':ns.valid,'allowed':ns.valid and (not relay2_conditions or (ns.on == relay2_conditions | length if relay2_condition_mode == 'all' else ns.on > 0))} }}
+      - action: "{{ relay_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          relay: 2
+          mode: "{{ ['off','pulse','until_stop','latch','after_stop'].index(relay2_mode) }}"
+          delay_s: "{{ relay2_delay | int }}"
+          duration_s: "{{ relay2_duration | int }}"
+          max_on_s: "{{ relay2_max_on | int }}"
+          off_on_snooze: "{{ relay2_snooze_off }}"
+          retrigger: "{{ relay2_resume }}"
+          require_gate: "{{ relay2_conditions | length > 0 }}"
+          auxiliary_buzzer: "{{ relay2_buzzer }}"
+          gate_allowed: "{{ relay_gate.allowed }}"
+          gate_valid: "{{ relay_gate.valid }}"
   - variables:
       night_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_night_schedule' }}"
   - if: "{{ has_service('esphome', night_action.split('.')[1]) }}"

@@ -6,6 +6,10 @@ Home Assistant alarm-clock prototype for original Sonoff NSPanel EU/US (not Pro)
 
 ## What is implemented
 
+- Standalone [relay rules, tone presets and event screens](docs/RELAYS-AND-EVENTS.md):
+  local bounded output timers, explicit HA conditions, manual takeover and
+  confirmed doorbell/alert actions. Outputs remain opt-in; hardware acceptance is open.
+
 - Standalone [night display and controls](docs/CONTROLS-AND-NIGHT.md): dim/black
   screensaver, local regular-alarm editor, gestures, long-button navigation,
   Snooze countdown, 12/24-hour display and optional selected data/appliance pages.
