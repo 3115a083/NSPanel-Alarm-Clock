@@ -86,8 +86,7 @@ binary_sensor:
           - ON for at least 800ms
         then:
           - lambda: |-
-              if (!wake_alarm::panel_controls().consumed[0])
-                id(wa_button_dispatch).execute(2);
+              id(wa_button_dispatch).execute(2);
       - timing:
           - ON for at most 799ms
           - OFF for at least 50ms
@@ -113,8 +112,7 @@ binary_sensor:
           - ON for at least 800ms
         then:
           - lambda: |-
-              if (!wake_alarm::panel_controls().consumed[1])
-                id(wa_button_dispatch).execute(3);
+              id(wa_button_dispatch).execute(3);
       - timing:
           - ON for at most 799ms
           - OFF for at least 50ms

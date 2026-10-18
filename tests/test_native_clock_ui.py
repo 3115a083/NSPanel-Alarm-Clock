@@ -80,6 +80,20 @@ int main() {
   renderer.reset();
   renderer.render(v, write);
   assert(writes == 15);
+  // Hidden editor/menu fields must not repaint the custom button rectangles.
+  renderer.reset(); writes=0;
+  assert(renderer.render(v,write,1));
+  assert(writes==1); // Menu exposes only wa_state.
+  v.text[4]="08:15";
+  assert(!renderer.render(v,write,1));
+  assert(writes==1);
+  renderer.reset();
+  assert(renderer.render(v,write,7));
+  assert(writes==4); // Editor exposes state/time/date, no lower fields.
+  assert(!renderer.render(v,write,7));
+  v.text[1]="08:16";
+  assert(renderer.render(v,write,7)); // Caller must restore coordinate graphics.
+  assert(writes==5);
 }
 ''', encoding='utf-8')
             exe = Path(temp) / 'ui'

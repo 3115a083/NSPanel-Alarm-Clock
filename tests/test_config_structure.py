@@ -66,8 +66,7 @@ class ConfigTests(unittest.TestCase):
         d = yaml.load((ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8'), Loader=Loader)
         self.assertEqual({b['name'] for b in d['button']},
                          {'Alarm Clock Test', 'Alarm Clock Snooze', 'Alarm Clock Stop',
-                          'Alarm Clock Preview Selected Tone', 'Alarm Clock Preview Configured Tone',
-                          'Alarm Clock Stop Tone Preview'})
+                          'Alarm Clock Preview Selected Tone', 'Alarm Clock Preview Configured Tone'})
 
     def test_flash_sync_is_not_faster_than_restored_globals_poll(self):
         d = yaml.load((ROOT/'esphome/nspanel_alarm_local.yaml').read_text(encoding='utf-8'), Loader=Loader)
