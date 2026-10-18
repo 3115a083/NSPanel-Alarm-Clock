@@ -202,11 +202,18 @@ interval:
           if (menu) { view.text={"Choose", "", "", "", "", "", ""}; footer="Close"; }
           view.text[6] = "";  // Footer drawn at explicit hit-target coordinates.
           const bool fresh = wake_alarm::clock_renderer().fresh;
-          wake_alarm::clock_renderer().render(view, [](const char *name, const std::string &text) {
+          const unsigned visible_fields = menu ? 1u : editor ? 7u : ui.dark ? (ui.twelve ? 30u : 26u) : 63u;
+          const bool native_changed = wake_alarm::clock_renderer().render(view, [](const char *name, const std::string &text) {
             id(disp1).set_component_text(name, wake_alarm::safe_text(text).c_str());
-          });
+          }, visible_fields);
+          // Coordinate graphics have no native backing store. Restore them LAST
+          // after text changes, and repair display-side touch redraws at 1 Hz.
+          // The queue guard above bounds traffic; no full-page refresh loop.
+          static uint32_t last_controls_paint = 0;
+          const bool repaint_controls = fresh || native_changed || uint32_t(millis()-last_controls_paint)>=1000;
+          if (repaint_controls) last_controls_paint=millis();
           static std::string previous_footer;
-          if (!ui.dark && (fresh || footer != previous_footer)) {
+          if (!ui.dark && (repaint_controls || footer != previous_footer)) {
             const char *left = menu ? "Back" : showing_notice ? "Dismiss" : id(wa_unacknowledged) ? (id(wa_ringing) ? "Snooze" : "") : editor ? "Cancel" : "<";
             const char *right = menu ? "" : showing_notice ? (overlay.action_enabled ? "Action" : "") : id(wa_unacknowledged) ? "Stop" : editor ? "Pages" : ">";
             id(disp1).send_command_printf("xstr 20,264,70,26,1,52857,0,1,1,1,\"%s\"", left);
@@ -215,7 +222,7 @@ interval:
           }
           previous_footer = footer;
           static int previous_menu_mask=-1;
-          if (menu && (fresh || previous_menu_mask!=ui.pages)) {
+          if (menu && (repaint_controls || previous_menu_mask!=ui.pages)) {
             id(disp1).send_command("fill 0,40,480,222,0");
             int row=0;
             for (int i=0;i<7;++i) if (ui.pages&(1<<i))
@@ -224,7 +231,7 @@ interval:
           }
           if (!menu) previous_menu_mask=-1;
           static int previous_editor_enabled=-1;
-          if (editor && (fresh || previous_editor_enabled!=int(ui.draft_enabled))) {
+          if (editor && (repaint_controls || previous_editor_enabled!=int(ui.draft_enabled))) {
             const char *labels[]={"Hour -","Hour +","Min -","Min +"};
             const int xs[]={20,130,250,360};
             for (int i=0;i<4;++i) id(disp1).send_command_printf("xstr %d,184,100,44,1,65535,10597,1,1,1,\"%s\"",xs[i],labels[i]);
@@ -246,7 +253,7 @@ interval:
             hints[1]=wake_alarm::button_hint(effective(id(wa_unacknowledged)?id(wa_button_alarm_right_short):id(wa_button_normal_right_short)),effective(id(wa_unacknowledged)?id(wa_button_alarm_right_long):id(wa_button_normal_right_long)),ui.custom_labels[1],ui.custom_labels[3]);
           }
           static std::string old_hints[2];
-          for (int i=0;i<2;++i) if (fresh || hints[i]!=old_hints[i]) {
+          for (int i=0;i<2;++i) if (repaint_controls || hints[i]!=old_hints[i]) {
             id(disp1).send_command_printf("xstr %d,294,220,26,1,33808,0,1,1,1,\"%s\"",i?250:10,hints[i].c_str());
             old_hints[i]=hints[i];
           }

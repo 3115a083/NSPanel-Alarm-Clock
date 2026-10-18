@@ -19,7 +19,7 @@ blueprint:
     min_version: 2026.10.1
   input:
     panel:
-      name: 1. Device and source-helper mapping
+      name: Device and required helpers
       description: Select the panel once. Source helpers are mapped here; their on/off state enables app/calendar wake sources.
       input:
         panel_device:
@@ -41,8 +41,8 @@ blueprint:
           description: Required mapping for compatibility. Leave the corresponding enable helper off when that source is unused.
           selector: {entity: {filter: {domain: input_boolean}}}
     regular:
-      name: 2. Weekly alarm and master switch
-      description: "Priority per date: imported app alarm, eligible calendar appointment, weekly fallback. Off master prevents all future schedules."
+      name: ⏰ Alarm time, weekdays and sound
+      description: "Set the time and weekdays first, then choose a tone. Preview Configured Tone on the ESPHome device or Preview tone on the display plays a short sample without relays. Priority per date: imported app alarm, eligible calendar appointment, weekly fallback. Off master prevents all future schedules."
       input:
         enabled_helper:
           name: Allow scheduled alarms - master switch helper
@@ -76,10 +76,18 @@ blueprint:
           description: Use 0 for immediate buzzer. Remote audio never disables it.
           default: 15
           selector: {number: {min: 0, max: 120, step: 1, mode: box}}
+        alarm_tone:
+          name: Mandatory local alarm tone
+          default: wake
+          selector: {select: {options: [wake, classic, gentle, signal]}}
+        preview_request_helpers:
+          name: Optional tone-preview button helper (zero or one)
+          description: Press this input_button to hear the selected alarm tone for at most 5 seconds. This is NOT Test Alarm and never triggers relays. Without a helper, use Preview Selected/Configured Tone on the panel device.
+          default: []
+          selector: {entity: {filter: {domain: input_button}, multiple: true}}
     display:
-      name: 3. Display pages and appliance control
+      name: Display and available pages
       description: Selected sources enable pages automatically. Open Pages by tapping the top title; arrows/swipes skip the alarm editor. Appliance control remains a separate opt-in.
-      collapsed: true
       input:
         clock_format:
           name: Time format
@@ -113,26 +121,8 @@ blueprint:
           name: Allow explicit humidifier controls on the panel
           default: false
           selector: {boolean: {}}
-    agenda:
-      name: 4. Calendar display after waking
-      description: These calendars only populate the display. They do not alter wake times; wake calendars are in section 7.
-      collapsed: true
-      input:
-        agenda_calendars:
-          name: Display calendars (independent of alarm calendars)
-          default: []
-          selector: {entity: {filter: {domain: calendar}, multiple: true}}
-        agenda_filter:
-          name: Agenda title contains (optional, case insensitive)
-          default: ''
-          selector: {text: {}}
-        agenda_after_stop:
-          name: Show calendar page after Stop (seconds; 0 = off)
-          default: 0
-          description: Snooze does not count as getting up. Select Display calendars first.
-          selector: {number: {min: 0, max: 3600, step: 1, mode: box}}
     night:
-      name: 5. Screensaver and lights-out schedule
+      name: 🌙 Screensaver and lights-out
       description: Dim retains the clock; 0% backlight is unreadable in a dark room. Inactivity applies inside the selected window or all day. Lights-out overrides dimming.
       collapsed: true
       input:
@@ -183,8 +173,26 @@ blueprint:
           name: Wake the display this many minutes before the alarm (0 disables)
           default: 0
           selector: {number: {min: 0, max: 60, step: 1, mode: box}}
+    agenda:
+      name: 📅 Calendar page after waking
+      description: These calendars populate the calendar page only. If left empty, wake-time calendars are displayed instead. Selecting calendars here never enables calendar alarms.
+      collapsed: true
+      input:
+        agenda_calendars:
+          name: Display calendars (independent of alarm calendars)
+          default: []
+          selector: {entity: {filter: {domain: calendar}, multiple: true}}
+        agenda_filter:
+          name: Agenda title contains (optional, case insensitive)
+          default: ''
+          selector: {text: {}}
+        agenda_after_stop:
+          name: Show calendar page after Stop (seconds; 0 = off)
+          default: 0
+          description: Snooze does not count as getting up. Uses display calendars, or wake-time calendars when none are selected here.
+          selector: {number: {min: 0, max: 3600, step: 1, mode: box}}
     app:
-      name: 6. Optional app alarm import
+      name: App alarm import (optional)
       description: Only active when the mapped App Import helper is on. Android sensor is optional; an authenticated integration can set the date-and-time helper instead.
       collapsed: true
       input:
@@ -215,7 +223,7 @@ blueprint:
                 - {label: Keep an already committed app alarm, value: keep_committed}
                 - {label: Clear app alarm and use fallback, value: clear}
     calendar:
-      name: 7. Optional calendar wake adjustment
+      name: Calendar-based wake times (optional)
       description: "Only active when the mapped Calendar Alarm helper is on. Example: appointment 08:00 minus 30 min gives 07:30. A late appointment outside the allowed range uses weekly fallback."
       collapsed: true
       input:
@@ -251,23 +259,9 @@ blueprint:
           name: Allow calendar alarms on unselected weekdays
           default: false
           selector: {boolean: {}}
-    tones:
-      name: 8. Alarm tone and harmless preview
-      description: Use Preview Selected/Configured Tone and Stop Tone Preview on the ESPHome device. Preview lasts at most 5 s, changes no alarm time and triggers no relay. Test Alarm is a real alarm and CAN trigger enabled relays.
-      collapsed: true
-      input:
-        alarm_tone:
-          name: Mandatory local alarm tone
-          default: wake
-          selector: {select: {options: [wake, classic, gentle, signal]}}
-        preview_request_helpers:
-          name: Optional tone-preview button helper (zero or one)
-          description: Press this input_button to hear the selected alarm tone for at most 5 seconds. This is NOT Test Alarm and never triggers relays. Without a helper, use Preview Selected/Configured Tone on the panel device.
-          default: []
-          selector: {entity: {filter: {domain: input_button}, multiple: true}}
     buttons:
-      name: 9. Physical buttons - normal operation
-      description: Short acts on release, hold at 0.8 s. Right hold for 5 s always stops an alarm. Decrease/increase only work in editor or appliance screens; use Previous/Next for direct page navigation.
+      name: Physical buttons and their display labels
+      description: Normal and alarm mappings are independent. Hold for 0.8 seconds to navigate by default; short presses wake a sleeping display. Custom actions run only for gestures set to Custom. Right hold for 5 seconds always stops an alarm.
       collapsed: true
       input:
         normal_left_short:
@@ -335,11 +329,6 @@ blueprint:
           description: Left/right labels sit directly above the physical buttons. S means short press, H means hold. They follow normal/alarm mappings and disappear in night mode. None means no action in the current screen.
           default: true
           selector: {boolean: {}}
-    alarm_buttons:
-      name: 10. Physical buttons - pending alarm or Snooze
-      description: The alarm owns the display. Choose Snooze, Stop, no action or an explicit custom action. Page/editor choices previously ignored in this state are no longer offered.
-      collapsed: true
-      input:
         alarm_left_short:
           name: Alarm - left short
           default: snooze
@@ -380,11 +369,6 @@ blueprint:
                 - {label: "Snooze (ringing alarm only)", value: snooze}
                 - {label: "Stop pending alarm", value: stop}
                 - {label: "Run custom Home Assistant action", value: custom}
-    custom_buttons:
-      name: 11. Custom button actions and on-screen names
-      description: Each sequence is shared by normal/alarm mappings that select Custom for that gesture. Delegate long sequences to HA scripts because this setup automation uses restart mode.
-      collapsed: true
-      input:
         custom_left_short:
           name: Custom HA action - left short
           description: Runs only when the corresponding normal/alarm mapping is custom.
@@ -426,7 +410,7 @@ blueprint:
           default: Custom
           selector: {text: {}}
     outputs:
-      name: 12. Relay 1 - optional local alarm output
+      name: 🔌 Relay outputs (optional)
       description: Off by default. Test Alarm triggers enabled rules too. Pulse uses Duration from switch-on; run-on uses Duration from Stop. Maximum automatic on-time always wins. Manual override cancels owned timers.
       collapsed: true
       input:
@@ -479,11 +463,6 @@ blueprint:
               options:
                 - {label: 'AND: every selected condition is on', value: all}
                 - {label: 'OR: at least one selected condition is on', value: any}
-    relay2:
-      name: 13. Relay 2 - optional local alarm output
-      description: Same independent rules as Relay 1. Empty conditions allow local offline operation; unknown or stale selected conditions block a new switch-on.
-      collapsed: true
-      input:
         relay2_mode:
           name: Relay 2 - alarm behavior
           default: 'off'
@@ -590,7 +569,7 @@ variables:
   climate_control: !input climate_control
   humidifier_entities: !input humidifier_entities
   humidifier_control: !input humidifier_control
-  agenda_calendars: !input agenda_calendars
+  selected_agenda_calendars: !input agenda_calendars
   agenda_filter: !input agenda_filter
   agenda_after_stop: !input agenda_after_stop
   enabled_helper: !input enabled_helper
@@ -605,12 +584,17 @@ variables:
   app_missing_policy: !input app_missing_policy
   calendar_enabled_helper: !input calendar_enabled_helper
   calendars: !input calendars
+  agenda_calendars: "{{ selected_agenda_calendars if selected_agenda_calendars else calendars }}"
   lead_minutes: !input lead_minutes
   earliest: !input earliest
   latest: !input latest
   calendar_mode: !input calendar_mode
   calendar_free_days: !input calendar_free_days
 triggers:
+  - trigger: event
+    id: panel_service
+    event_type: service_registered
+    event_data: {domain: esphome}
   - trigger: state
     id: tone_preview
     entity_id: !input preview_request_helpers
@@ -664,6 +648,20 @@ triggers:
     for: {seconds: 5}
   - trigger: state
     entity_id: !input agenda_calendars
+conditions:
+  - condition: template
+    value_template: >-
+      {% set ns=namespace(match=false) %}
+      {% if trigger is defined and trigger.id | default('') == 'panel_service' %}
+        {% for entity in device_entities(panel_device) %}
+          {% set parts=states(entity).split('|') %}
+          {% if entity in integration_entities('esphome') and parts | length == 5 and parts[0]=='NSPALARM1' %}
+            {% set prefix=parts[1] | replace('-','_') %}
+            {% if trigger.event.data.service | default('') in [prefix ~ '_alarm_page_settings',prefix ~ '_alarm_update_cards'] %}{% set ns.match=true %}{% endif %}
+          {% endif %}
+        {% endfor %}
+      {% else %}{% set ns.match=true %}{% endif %}
+      {{ ns.match }}
 actions:
   - variables:
       snapshots: >-
@@ -741,11 +739,14 @@ actions:
         data:
           expected_device: "{{ snapshot[1] }}"
           expected_mac: "{{ snapshot[2] }}"
-          blueprint_revision: '0.3.4'
+          blueprint_revision: '0.3.5'
   - variables:
       pages_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_page_settings' }}"
       labels_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_button_labels' }}"
       requested_page_mask: "{{ 3 + (4 if weather_entities else 0) + (8 if display_entities else 0) + (16 if climate_entities else 0) + (32 if humidifier_entities else 0) + (64 if agenda_calendars else 0) }}"
+  - wait_template: "{{ has_service('esphome',pages_action.split('.')[1]) }}"
+    timeout: '00:00:20'
+    continue_on_timeout: false
   - if: "{{ has_service('esphome',pages_action.split('.')[1]) }}"
     then:
       - action: "{{ pages_action }}"
@@ -882,6 +883,60 @@ actions:
         then:
           - stop: Explicit panel request handled or ignored. Values refresh from authoritative HA state.
   - variables:
+      cards_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_update_cards' }}"
+  - if: "{{ has_service('esphome', cards_action.split('.')[1]) }}"
+    then:
+      - variables:
+          agenda_reply: {}
+      - if: "{{ agenda_calendars | length > 0 }}"
+        then:
+          - action: calendar.get_events
+            continue_on_error: true
+            target: {entity_id: "{{ agenda_calendars }}"}
+            data:
+              start_date_time: "{{ now().isoformat() }}"
+              end_date_time: "{{ (today_at('00:00') + timedelta(days=2)).isoformat() }}"
+            response_variable: agenda_reply
+      - variables:
+          agenda_valid: >-
+            {% set ns = namespace(ok=true) %}
+            {% for entity in agenda_calendars %}
+              {% if entity not in agenda_reply or agenda_reply[entity].get('events') is not iterable %}{% set ns.ok=false %}{% endif %}
+            {% endfor %}
+            {{ ns.ok }}
+          agenda_lines: >-
+            {% set ns = namespace(items=[]) %}
+            {% for entity in agenda_calendars %}
+              {% for event in agenda_reply.get(entity,{}).get('events',[]) %}
+                {% set title = event.get('summary','') | string %}
+                {% set raw = event.get('start','') | string %}
+                {% set epoch = as_timestamp(raw,0) %}
+                {% if epoch > 0 and (not agenda_filter or agenda_filter | lower in title | lower) %}
+                  {% set clock = epoch | timestamp_custom('%H:%M' if clock_format == '24h' else '%I:%M %p', true) if ':' in raw else 'All day' %}
+                  {% set ns.items = ns.items + [{'epoch':epoch,'text':clock ~ ' ' ~ title}] %}
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+            {{ (ns.items | sort(attribute='epoch') | map(attribute='text') | list)[:2] }}
+      - action: "{{ cards_action }}"
+        data:
+          expected_device: "{{ snapshot[1] }}"
+          expected_mac: "{{ snapshot[2] }}"
+          page_mask: "{{ 3 + (4 if weather_entities else 0) + (8 if display_entities else 0) + (16 if climate_entities else 0) + (32 if humidifier_entities else 0) + (64 if agenda_calendars else 0) }}"
+          weather: "{{ states(weather_entities[0]) if weather_entities else '' }}"
+          weather_detail: "{{ (state_attr(weather_entities[0],'temperature') | string) ~ ' ' ~ (state_attr(weather_entities[0],'temperature_unit') | default('',true) | replace('°','')) ~ '  Humidity ' ~ (state_attr(weather_entities[0],'humidity') | string) ~ '%' if weather_entities else '' }}"
+          entity0: "{{ ((state_attr(display_entities[0],'friendly_name') | default(display_entities[0],true)) ~ ': ' ~ states(display_entities[0]) ~ ' ' ~ (state_attr(display_entities[0],'unit_of_measurement') | default('',true))) if display_entities | length > 0 else '' }}"
+          entity1: "{{ ((state_attr(display_entities[1],'friendly_name') | default(display_entities[1],true)) ~ ': ' ~ states(display_entities[1]) ~ ' ' ~ (state_attr(display_entities[1],'unit_of_measurement') | default('',true))) if display_entities | length > 1 else '' }}"
+          entity2: "{{ ((state_attr(display_entities[2],'friendly_name') | default(display_entities[2],true)) ~ ': ' ~ states(display_entities[2]) ~ ' ' ~ (state_attr(display_entities[2],'unit_of_measurement') | default('',true))) if display_entities | length > 2 else '' }}"
+          entity3: "{{ ((state_attr(display_entities[3],'friendly_name') | default(display_entities[3],true)) ~ ': ' ~ states(display_entities[3]) ~ ' ' ~ (state_attr(display_entities[3],'unit_of_measurement') | default('',true))) if display_entities | length > 3 else '' }}"
+          climate: "{{ states(climate_entities[0]) ~ '  Current ' ~ (state_attr(climate_entities[0],'current_temperature') | string) if climate_entities else '' }}"
+          climate_detail: "{{ 'Target ' ~ (state_attr(climate_entities[0],'temperature') | string) ~ (' | controls enabled' if climate_control else ' | read only') if climate_entities else '' }}"
+          humidity: "{{ states(humidifier_entities[0]) ~ '  Current ' ~ (state_attr(humidifier_entities[0],'current_humidity') | string) ~ '%' if humidifier_entities else '' }}"
+          humidity_detail: "{{ 'Target ' ~ (state_attr(humidifier_entities[0],'humidity') | string) ~ '%' ~ (' | controls enabled' if humidifier_control else ' | read only') if humidifier_entities else '' }}"
+          agenda: "{{ agenda_lines[0] if agenda_lines else 'No matching events' }}"
+          agenda_detail: "{{ agenda_lines[1] if agenda_lines | length > 1 else '' }}"
+          agenda_valid: "{{ agenda_valid }}"
+  - variables:
       tone_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_tone_settings' }}"
       relay_action: "{{ 'esphome.' ~ panel_name | replace('-','_') ~ '_alarm_relay_settings' }}"
   - if: "{{ has_service('esphome', tone_action.split('.')[1]) }}"
@@ -998,58 +1053,7 @@ actions:
           awake_brightness: "{{ awake_brightness | int }}"
           prewake_minutes: "{{ prewake_minutes | int }}"
           agenda_seconds: "{{ agenda_after_stop | int }}"
-  - if: "{{ has_service('esphome', cards_action.split('.')[1]) }}"
-    then:
-      - variables:
-          agenda_reply: {}
-      - if: "{{ agenda_calendars | length > 0 }}"
-        then:
-          - action: calendar.get_events
-            continue_on_error: true
-            target: {entity_id: !input agenda_calendars}
-            data:
-              start_date_time: "{{ now().isoformat() }}"
-              end_date_time: "{{ (today_at('00:00') + timedelta(days=2)).isoformat() }}"
-            response_variable: agenda_reply
-      - variables:
-          agenda_valid: >-
-            {% set ns = namespace(ok=true) %}
-            {% for entity in agenda_calendars %}
-              {% if entity not in agenda_reply or agenda_reply[entity].get('events') is not iterable %}{% set ns.ok=false %}{% endif %}
-            {% endfor %}
-            {{ ns.ok }}
-          agenda_lines: >-
-            {% set ns = namespace(items=[]) %}
-            {% for entity in agenda_calendars %}
-              {% for event in agenda_reply.get(entity,{}).get('events',[]) %}
-                {% set title = event.get('summary','') | string %}
-                {% set raw = event.get('start','') | string %}
-                {% set epoch = as_timestamp(raw,0) %}
-                {% if epoch > 0 and (not agenda_filter or agenda_filter | lower in title | lower) %}
-                  {% set clock = epoch | timestamp_custom('%H:%M' if clock_format == '24h' else '%I:%M %p', true) if ':' in raw else 'All day' %}
-                  {% set ns.items = ns.items + [{'epoch':epoch,'text':clock ~ ' ' ~ title}] %}
-                {% endif %}
-              {% endfor %}
-            {% endfor %}
-            {{ (ns.items | sort(attribute='epoch') | map(attribute='text') | list)[:2] }}
-      - action: "{{ cards_action }}"
-        data:
-          expected_device: "{{ snapshot[1] }}"
-          expected_mac: "{{ snapshot[2] }}"
-          page_mask: "{{ 3 + (4 if weather_entities else 0) + (8 if display_entities else 0) + (16 if climate_entities else 0) + (32 if humidifier_entities else 0) + (64 if agenda_calendars else 0) }}"
-          weather: "{{ states(weather_entities[0]) if weather_entities else '' }}"
-          weather_detail: "{{ (state_attr(weather_entities[0],'temperature') | string) ~ ' ' ~ (state_attr(weather_entities[0],'temperature_unit') | default('',true) | replace('°','')) ~ '  Humidity ' ~ (state_attr(weather_entities[0],'humidity') | string) ~ '%' if weather_entities else '' }}"
-          entity0: "{{ ((state_attr(display_entities[0],'friendly_name') | default(display_entities[0],true)) ~ ': ' ~ states(display_entities[0]) ~ ' ' ~ (state_attr(display_entities[0],'unit_of_measurement') | default('',true))) if display_entities | length > 0 else '' }}"
-          entity1: "{{ ((state_attr(display_entities[1],'friendly_name') | default(display_entities[1],true)) ~ ': ' ~ states(display_entities[1]) ~ ' ' ~ (state_attr(display_entities[1],'unit_of_measurement') | default('',true))) if display_entities | length > 1 else '' }}"
-          entity2: "{{ ((state_attr(display_entities[2],'friendly_name') | default(display_entities[2],true)) ~ ': ' ~ states(display_entities[2]) ~ ' ' ~ (state_attr(display_entities[2],'unit_of_measurement') | default('',true))) if display_entities | length > 2 else '' }}"
-          entity3: "{{ ((state_attr(display_entities[3],'friendly_name') | default(display_entities[3],true)) ~ ': ' ~ states(display_entities[3]) ~ ' ' ~ (state_attr(display_entities[3],'unit_of_measurement') | default('',true))) if display_entities | length > 3 else '' }}"
-          climate: "{{ states(climate_entities[0]) ~ '  Current ' ~ (state_attr(climate_entities[0],'current_temperature') | string) if climate_entities else '' }}"
-          climate_detail: "{{ 'Target ' ~ (state_attr(climate_entities[0],'temperature') | string) ~ (' | controls enabled' if climate_control else ' | read only') if climate_entities else '' }}"
-          humidity: "{{ states(humidifier_entities[0]) ~ '  Current ' ~ (state_attr(humidifier_entities[0],'current_humidity') | string) ~ '%' if humidifier_entities else '' }}"
-          humidity_detail: "{{ 'Target ' ~ (state_attr(humidifier_entities[0],'humidity') | string) ~ '%' ~ (' | controls enabled' if humidifier_control else ' | read only') if humidifier_entities else '' }}"
-          agenda: "{{ agenda_lines[0] if agenda_lines else 'No matching events' }}"
-          agenda_detail: "{{ agenda_lines[1] if agenda_lines | length > 1 else '' }}"
-          agenda_valid: "{{ agenda_valid }}"
+
   - variables:
       master: "{{ is_state(enabled_helper, 'on') }}"
   - condition: template

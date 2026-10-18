@@ -43,16 +43,21 @@ struct ClockRenderer {
   std::array<std::string, 7> previous{};
   bool fresh{true};
   void reset() { fresh = true; }
-  template<typename Writer> void render(const ClockView &view, Writer write) {
+  // Never write hidden native fields: Nextion text updates can repaint the
+  // background beneath our coordinate-drawn controls.
+  template<typename Writer> bool render(const ClockView &view, Writer write, unsigned visible = 127) {
+    bool changed = false;
     static const char *const names[] = {"wa_state", "wa_time", "wa_date", "wa_label",
                                        "wa_alarm", "wa_enabled", "wa_days"};
     for (size_t i = 0; i < previous.size(); ++i) {
-      if (fresh || view.text[i] != previous[i]) {
+      if ((visible & (1u << i)) && (fresh || view.text[i] != previous[i])) {
         write(names[i], view.text[i]);
         previous[i] = view.text[i];
+        changed = true;
       }
     }
     fresh = false;
+    return changed;
   }
 };
 // ESPHome emits globals<T> storage before user includes in main.cpp. Keep the

@@ -549,10 +549,6 @@ button:
     on_press:
       - lambda: id(wa_preview_tone).execute(id(wa_tone_preset));
   - platform: template
-    name: Alarm Clock Stop Tone Preview
-    on_press:
-      - script.execute: wa_stop_preview
-  - platform: template
     name: "Alarm Clock Test"
     on_press:
       then:

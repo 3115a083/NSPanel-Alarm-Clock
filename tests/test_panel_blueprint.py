@@ -10,6 +10,29 @@ def walk(value):
         for child in value: yield from walk(child)
 
 class PanelBlueprintTests(unittest.TestCase):
+    def test_setup_order_and_calendar_page_fallback(self):
+        sections=NEW['blueprint']['input']
+        self.assertEqual(list(sections),['panel','regular','display','night','agenda','app','calendar','buttons','outputs'])
+        for section in sections.values():
+            self.assertFalse(section['name'][0].isdigit())
+        self.assertIn('alarm_tone',sections['regular']['input'])
+        self.assertIn('alarm_left_short',sections['buttons']['input'])
+        self.assertIn('relay2_mode',sections['outputs']['input'])
+        fallback=NEW['variables']['agenda_calendars']
+        self.assertEqual(render(fallback,dict(selected_agenda_calendars=[],calendars=['calendar.work'])),['calendar.work'])
+        self.assertEqual(render(fallback,dict(selected_agenda_calendars=['calendar.private'],calendars=['calendar.work'])),['calendar.private'])
+
+    def test_service_registration_filter_ignores_other_devices(self):
+        guard=NEW['conditions'][0]['value_template']
+        from types import SimpleNamespace as NS
+        values=dict(panel_device='clock',device_entities=lambda _:['sensor.identity'],
+            integration_entities=lambda _:['sensor.identity'],states=lambda _:'NSPALARM1|bedroom|aa0011223344|0:31:6:30:9:15|0:0:0:0:0:0')
+        for service,expected in [('bedroom_alarm_page_settings',True),('bedroom_alarm_update_cards',True),('other_alarm_update_cards',False),('bedroom_alarm_stop',False)]:
+            values['trigger']=NS(id='panel_service',event=NS(data=NS(service=service)))
+            self.assertEqual(render(guard,values),expected)
+        values['trigger']=NS(id='panel_available')
+        self.assertTrue(render(guard,values))
+
     def test_page_routing_precedes_optional_fetches_and_matches_cards(self):
         actions=NEW['actions']
         early=next(i for i,d in enumerate(actions) if 'pages_action' in d.get('variables',{}))

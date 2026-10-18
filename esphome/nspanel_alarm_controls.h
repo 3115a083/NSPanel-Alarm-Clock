@@ -122,6 +122,11 @@ struct PanelControls {
   }
   void navigate(int direction) {
     menu_open=false; editing = false; auto_agenda = false;
+    if ((pages & 124) == 0) {
+      page=PanelPage::CLOCK;
+      notice="No extra pages: check Blueprint"; notice_ms=activity_ms;
+      return;
+    }
     for (int i = 0; i < 7; ++i) {
       page = PanelPage((int(page) + direction + 7) % 7);
       if (page != PanelPage::ALARM && (pages & (1 << int(page)))) return;
